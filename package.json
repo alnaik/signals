@@ -1,0 +1,33 @@
+{
+  "name": "job-signal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "jobsignal": "bin/jobsignal.ts"
+  },
+  "scripts": {
+    "start": "bun bin/jobsignal.ts serve",
+    "test": "bun test",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "typecheck": "bun scripts/gen.ts >/dev/null && tsc --noEmit",
+    "check": "bun run lint && bun run typecheck && bun test"
+  },
+  "trustedDependencies": [],
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.132.0",
+    "js-yaml": "5.4.3",
+    "playwright": "1.64.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/bun": "1.4.2",
+    "@types/chrome": "0.3.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}

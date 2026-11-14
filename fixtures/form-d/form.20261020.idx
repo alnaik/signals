@@ -1,0 +1,19 @@
+Description:           Daily Index of EDGAR Dissemination Feed by Form Type
+Last Data Received:    October 20, 2026
+Comments:              webmaster@sec.gov
+Anonymous FTP:         ftp://ftp.sec.gov/edgar/
+ 
+ 
+ 
+ 
+Form Type   Company Name                                                  CIK         Date Filed  File Name
+---------------------------------------------------------------------------------------------------------------------------------------------
+D           Brindle Learning, Inc.                                        1900101     20261020    edgar/data/1900101/0001900101-26-000002.txt
+D           Ridgeline Robotics Inc                                        1900202     20261020    edgar/data/1900202/0001900202-26-000001.txt
+D           Cedar Range Ventures Fund II, L.P.                            1900303     20261020    edgar/data/1900303/0001900303-26-000001.txt
+D           Aspen Lodging Holdings LLC                                    1900404     20261020    edgar/data/1900404/0001900404-26-000001.txt
+D           Bayside Analytics Inc.                                        1900505     20261020    edgar/data/1900505/0001900505-26-000001.txt
+D           Tiny Seed Co                                                  1900606     20261020    edgar/data/1900606/0001900606-26-000001.txt
+D           Mesa Unknown Systems, Inc.                                    1900707     20261020    edgar/data/1900707/0001900707-26-000001.txt
+D/A         Ridgeline Robotics Inc                                        1900202     20261020    edgar/data/1900202/0001900202-26-000009.txt
+10-K        Big Co                                                        3           20261020    edgar/data/3/0000000003-26-000001.txt

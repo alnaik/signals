@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 344" role="img" aria-labelledby="t d">
+<title id="t">Job Signal user flow</title>
+<desc id="d">One role passes back and forth between Job Signal and you. Job Signal reads boards and sources into the Inbox, you choose Apply, it opens the form filled, you submit and press Done or Work, it gathers facts and writes Problem / Person / Proof, you send the message and mark it sent.</desc>
+<style>
+  svg { --paper:#ffffff; --ink:#111111; --surface:#f4f4f4; --line:#e5e5e5; --line2:#cfcfcf; --muted:#5f5f5f; --track:#9a9a9a; --signal:#ff5a1f; --signaltext:#b93d0d; }
+  @media (prefers-color-scheme: dark) {
+    svg { --paper:#0f0f10; --ink:#f2f2f2; --surface:#1a1a1c; --line:#2a2a2d; --line2:#3a3a3e; --muted:#a3a3a8; --track:#6b6b70; --signal:#ff6a33; --signaltext:#ff8a5c; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  .frame { fill: var(--paper); stroke: var(--line2); }
+  .band { fill: var(--surface); }
+  .rule { stroke: var(--line); fill: none; }
+  .lane { font-size: 10.5px; letter-spacing: .06em; fill: var(--muted); }
+  .lane.you { fill: var(--signaltext); }
+  .n { font-size: 11px; fill: var(--muted); }
+  .h { font-size: 13px; font-weight: 600; }
+  .w { font-size: 11.5px; fill: var(--muted); }
+  .note { font-size: 11.5px; fill: var(--muted); }
+  .note tspan.b { fill: var(--ink); font-weight: 500; }
+  .track { fill: none; stroke: var(--track); stroke-width: 2; stroke-linecap: round; }
+  .yours { fill: none; stroke: var(--signal); stroke-width: 3; stroke-linecap: round; }
+  .inject { fill: none; stroke: var(--signal); stroke-width: 1.5; stroke-dasharray: 3 4; }
+  .head { fill: var(--signal); }
+  .gate { fill: var(--paper); stroke: var(--signal); stroke-width: 2; }
+  .pulse { fill: none; stroke: var(--signal); stroke-width: 1.5; }
+  .chip rect { fill: var(--paper); stroke: var(--line2); }
+  .chip.go rect { stroke: var(--signal); }
+  .chip text { font-size: 11px; font-weight: 500; }
+  .chip.no text { fill: var(--muted); }
+  .key { font-size: 11px; fill: var(--muted); }
+  .halo { fill: var(--signal); opacity: .22; }
+  .dot { fill: var(--signal); }
+  @media (prefers-reduced-motion: reduce) { .mover, .pulse { display: none; } }
+</style>
+
+<rect class="frame" x="0.5" y="0.5" width="999" height="343" rx="10"/>
+<path class="band" d="M10.5 .5H100V310H.5V10.5A10 10 0 0 1 10.5 .5Z"/>
+<path class="rule" d="M.5 170H999.5M.5 310H999.5M100 .5V310"/>
+
+<text class="lane" x="14" y="62">JOB SIGNAL</text>
+<text class="lane you" x="14" y="222">YOU</text>
+
+<!-- key -->
+<path class="track" d="M770 22H794"/><text class="key" x="802" y="26">Job Signal works</text>
+<path class="yours" d="M900 22H924"/><text class="key" x="932" y="26">You decide</text>
+
+<!-- one role: grey where Job Signal works, orange where it waits on you -->
+<path id="thread" class="track" d="M110 136H222Q230 136 230 144V196Q230 204 238 204H342Q350 204 350 196V144Q350 136 358 136H522Q530 136 530 144V196Q530 204 538 204H742Q750 204 750 196V144Q750 136 758 136H862Q870 136 870 144V196Q870 204 878 204H976"/>
+<path class="yours" d="M238 204H342M538 204H742M878 204H976"/>
+<path class="head" d="M976 198L986 204L976 210Z"/>
+
+<!-- 1 Arrive -->
+<text class="n" x="122" y="58">1</text><text class="h" x="134" y="58">Arrive</text>
+<text class="w" x="122" y="80"><tspan x="122">Reads boards and</tspan><tspan x="122" dy="16">your sources into</tspan><tspan x="122" dy="16">the Inbox</tspan></text>
+<path class="inject" d="M160 246V146"/><path class="head" d="M155 148L160 139L165 148Z"/>
+<g class="chip go"><rect x="122" y="246" width="40" height="22" rx="5"/><text x="130" y="261">Add</text></g>
+<text class="w" x="122" y="288">a company now</text>
+
+<!-- 2 Inbox -->
+<circle class="gate" cx="246" cy="204" r="5"/>
+<text class="n" x="242" y="230">2</text><text class="h" x="254" y="230">Inbox</text>
+<g class="chip go"><rect x="242" y="242" width="48" height="22" rx="5"/><text x="250" y="257">Apply</text></g>
+<g class="chip"><rect x="242" y="270" width="92" height="22" rx="5"/><text x="250" y="285">Apply + Watch</text></g>
+<g class="chip no"><rect x="296" y="242" width="60" height="22" rx="5"/><text x="304" y="257">Dismiss</text></g>
+
+<!-- 3 Apply -->
+<text class="n" x="362" y="58">3</text><text class="h" x="374" y="58">Apply</text>
+<text class="w" x="362" y="80"><tspan x="362">Opens the form filled from</tspan><tspan x="362" dy="16">your profile, saved answers</tspan><tspan x="362" dy="16">and your PDF</tspan></text>
+
+<!-- 4 Submit -->
+<circle class="gate" cx="546" cy="204" r="5"/>
+<text class="n" x="542" y="230">4</text><text class="h" x="554" y="230">Submit</text>
+<g class="chip go"><rect x="542" y="242" width="46" height="22" rx="5"/><text x="550" y="257">Done</text></g>
+<g class="chip"><rect x="594" y="242" width="46" height="22" rx="5"/><text x="602" y="257">Work</text></g>
+<text class="w" x="542" y="285">Work when you want</text>
+<text class="w" x="542" y="301">someone to write to</text>
+
+<!-- 5 Work -->
+<text class="n" x="762" y="58">5</text><text class="h" x="774" y="58">Work</text>
+<text class="w" x="762" y="80"><tspan x="762">Gathers facts with exact</tspan><tspan x="762" dy="16">quotes, then writes Problem</tspan><tspan x="762" dy="16">/ Person / Proof</tspan></text>
+
+<!-- 6 Reach out -->
+<circle class="gate" cx="886" cy="204" r="5"/>
+<text class="n" x="882" y="230">6</text><text class="h" x="894" y="230">Reach out</text>
+<g class="chip go"><rect x="882" y="242" width="74" height="22" rx="5"/><text x="890" y="257">Mark sent</text></g>
+<g class="chip go"><rect x="882" y="270" width="82" height="22" rx="5"/><text x="890" y="285">Got a reply</text></g>
+
+<!-- what the arrows leave out -->
+<text class="note" x="14" y="331"><tspan class="b">Dismiss</tspan> clears a role or a whole company. You write and send every message and press every Submit yourself.</text>
+
+<!-- one thread walking the line; it waits at each of your decisions -->
+<circle class="pulse" cx="246" cy="204" r="11" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.12;0.135;0.245;0.26;1"/></circle>
+<circle class="pulse" cx="546" cy="204" r="11" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.46;0.475;0.585;0.6;1"/></circle>
+<circle class="pulse" cx="886" cy="204" r="11" opacity="0"><animate attributeName="opacity" dur="14s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.78;0.795;0.885;0.9;1"/></circle>
+<g class="mover">
+  <circle class="halo" r="10"/><circle class="dot" r="6"/>
+  <animateMotion dur="14s" repeatCount="indefinite" calcMode="linear"
+    keyPoints="0;0.1675;0.1675;0.5265;0.5265;0.92;0.92;1;1"
+    keyTimes="0;0.12;0.26;0.46;0.6;0.78;0.9;0.95;1">
+    <mpath href="#thread"/>
+  </animateMotion>
+  <animate attributeName="opacity" dur="14s" repeatCount="indefinite" values="0;1;1;0;0" keyTimes="0;0.02;0.95;0.98;1"/>
+</g>
+</svg>

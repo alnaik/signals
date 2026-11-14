@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" role="img" aria-labelledby="t d">
+<title id="t">From a signal to an application</title>
+<desc id="d">On your Mac, Job Signal takes a signal in, names the company, proves its website, finds its job board and reads its roles; the roles that fit your titles and places reach your Inbox. There you pick. Apply opens the form filled in Chrome and you press Submit. Work gathers public facts with their quotes and writes a short brief, and you write the message.</desc>
+<style>
+  svg { --paper:#ffffff; --ink:#111111; --surface:#f4f4f4; --line2:#cfcfcf; --muted:#5f5f5f; --track:#9a9a9a; --signal:#ff5a1f; --signaltext:#b93d0d; }
+  @media (prefers-color-scheme: dark) {
+    svg { --paper:#0f0f10; --ink:#f2f2f2; --surface:#1a1a1c; --line2:#3a3a3e; --muted:#a3a3a8; --track:#6b6b70; --signal:#ff6a33; --signaltext:#ff8a5c; }
+  }
+  text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  .frame { fill: var(--paper); stroke: var(--line2); }
+  .band { fill: var(--surface); }
+  .lane { font-size: 10.5px; letter-spacing: .06em; fill: var(--muted); }
+  .lane.you { fill: var(--signaltext); }
+  .box { fill: var(--paper); stroke: var(--line2); }
+  .box.end { fill: var(--surface); }
+  .box.you { stroke: var(--signal); }
+  .n { font-size: 10.5px; fill: var(--muted); }
+  .h { font-size: 13px; font-weight: 600; }
+  .w { font-size: 11px; fill: var(--muted); }
+  .arrow { fill: none; stroke: var(--track); stroke-width: 1.5; }
+  .arrow.you { stroke: var(--signal); stroke-width: 2; }
+  .tip { fill: var(--track); }
+  .tip.you { fill: var(--signal); }
+  .note { font-size: 11.5px; fill: var(--muted); }
+</style>
+<rect class="frame" x="0.5" y="0.5" width="999" height="399" rx="8"/>
+<rect class="band" x="1" y="1" width="998" height="34" rx="7"/>
+<text class="lane" x="20" y="23">ON YOUR MAC, EVERY 15 MINUTES</text>
+
+<!-- Row 1: the five steps and the Inbox -->
+<g>
+  <rect class="box" x="20" y="52" width="142" height="118" rx="4"/>
+  <text class="n" x="32" y="72">Step 1</text>
+  <text class="h" x="32" y="90">Signal in</text>
+  <text class="w" x="32" y="112">A post, an alert email,</text>
+  <text class="w" x="32" y="127">a filing, a company</text>
+  <text class="w" x="32" y="142">you add yourself</text>
+
+  <rect class="box" x="182" y="52" width="142" height="118" rx="4"/>
+  <text class="n" x="194" y="72">Step 2</text>
+  <text class="h" x="194" y="90">Company named</text>
+  <text class="w" x="194" y="112">Which company the</text>
+  <text class="w" x="194" y="127">signal is about</text>
+
+  <rect class="box" x="344" y="52" width="142" height="118" rx="4"/>
+  <text class="n" x="356" y="72">Step 3</text>
+  <text class="h" x="356" y="90">Website proven</text>
+  <text class="w" x="356" y="112">Its real website, only</text>
+  <text class="w" x="356" y="127">with proof that it is</text>
+  <text class="w" x="356" y="142">the company's</text>
+
+  <rect class="box" x="506" y="52" width="142" height="118" rx="4"/>
+  <text class="n" x="518" y="72">Step 4</text>
+  <text class="h" x="518" y="90">Board found</text>
+  <text class="w" x="518" y="112">Its own job board or</text>
+  <text class="w" x="518" y="127">careers page</text>
+
+  <rect class="box" x="668" y="52" width="142" height="118" rx="4"/>
+  <text class="n" x="680" y="72">Step 5</text>
+  <text class="h" x="680" y="90">Roles read</text>
+  <text class="w" x="680" y="112">Every open role,</text>
+  <text class="w" x="680" y="127">read again about</text>
+  <text class="w" x="680" y="142">every 6 hours</text>
+
+  <rect class="box end" x="830" y="52" width="150" height="118" rx="4"/>
+  <text class="n" x="842" y="72">End</text>
+  <text class="h" x="842" y="90">Inbox</text>
+  <text class="w" x="842" y="112">Only roles that fit</text>
+  <text class="w" x="842" y="127">your title words</text>
+  <text class="w" x="842" y="142">and places</text>
+
+  <path class="arrow" d="M162 111 H178"/><path class="tip" d="M182 111 l-6 -4 v8 z"/>
+  <path class="arrow" d="M324 111 H340"/><path class="tip" d="M344 111 l-6 -4 v8 z"/>
+  <path class="arrow" d="M486 111 H502"/><path class="tip" d="M506 111 l-6 -4 v8 z"/>
+  <path class="arrow" d="M648 111 H664"/><path class="tip" d="M668 111 l-6 -4 v8 z"/>
+  <path class="arrow" d="M810 111 H826"/><path class="tip" d="M830 111 l-6 -4 v8 z"/>
+</g>
+
+<!-- Row 2: you -->
+<rect class="band" x="1" y="190" width="998" height="30"/>
+<text class="lane you" x="20" y="210">YOU</text>
+
+<path class="arrow you" d="M905 170 V236 H826"/><path class="tip you" d="M820 236 l7 -4.5 v9 z"/>
+
+<rect class="box you" x="668" y="236" width="150" height="112" rx="4"/>
+<text class="h" x="680" y="258">You pick</text>
+<text class="w" x="680" y="280">Apply, Apply + Watch,</text>
+<text class="w" x="680" y="295">or Dismiss. A few good</text>
+<text class="w" x="680" y="310">ones, not every one.</text>
+
+<path class="arrow you" d="M668 270 H495"/><path class="tip you" d="M489 270 l7 -4.5 v9 z"/>
+<rect class="box you" x="344" y="236" width="142" height="112" rx="4"/>
+<text class="h" x="356" y="258">Apply</text>
+<text class="w" x="356" y="280">The form opens in</text>
+<text class="w" x="356" y="295">Chrome, filled in.</text>
+<text class="w" x="356" y="310">You check it and</text>
+<text class="w" x="356" y="325">press Submit.</text>
+
+<path class="arrow you" d="M344 300 H171"/><path class="tip you" d="M165 300 l7 -4.5 v9 z"/>
+<rect class="box you" x="20" y="236" width="142" height="112" rx="4"/>
+<text class="h" x="32" y="258">Work (if you like)</text>
+<text class="w" x="32" y="280">Public facts, each</text>
+<text class="w" x="32" y="295">with its quote, then</text>
+<text class="w" x="32" y="310">who to write to.</text>
+<text class="w" x="32" y="325">You write the message.</text>
+
+<text class="note" x="20" y="380">Nothing is sent for you: no form is submitted and no message is sent by Job Signal.</text>
+</svg>

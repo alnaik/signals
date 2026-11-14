@@ -1,0 +1,23 @@
+Help me create my positioning page for Job Signal, my job-search system.
+It is private: a reference for me and for the agent that researches companies
+for me. It replaces fit scores, so it must be specific and evidence-backed.
+
+Format: one Markdown file, positioning.md, with four sections:
+1. Who I'm for: company stage, size, kind of team, kind of product.
+2. Problems I solve: each problem in one line, with links to evidence
+   (repo, demo, write-up, number). No claim without a link.
+3. Not for: what I'd turn down, and why in a few words.
+4. Proofs: what I've built or shipped that shows it, one line each with a link.
+
+How to work:
+- First, draft the whole page from what I give you: my CV, my GitHub
+  (read the repos, not just the names), my site and any write-ups.
+  Mark every line you inferred rather than read as "(inferred)".
+- Then ask me only what you couldn't infer, one question at a time, about
+  five questions at most, mostly about who I'm for and what's not for me.
+- After each answer, update the draft. Remove "(inferred)" once I confirm.
+- Keep lines short and concrete: numbers, names, links. No adjectives
+  like "passionate" or "results-driven".
+- Finish with the final positioning.md and a separate list: each claim
+  and its evidence link, as JSON Lines {"claim": ..., "url": ...}
+  for my me/evidence.jsonl file.

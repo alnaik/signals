@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist.next/
+*.gen.ts
+.DS_Store
+# Personal data never lives in the repo. These catch accidents.
+.env*
+*.db
+*.db-*
+/data/
+/JobSignal/
+__pycache__/
+fixtures/fake-claude-bin
+fixtures/fake-claude-apply-bin
+.claude/

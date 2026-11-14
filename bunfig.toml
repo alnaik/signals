@@ -1,0 +1,4 @@
+[install]
+# Exact versions only; refuse anything published in the last 14 days.
+exact = true
+minimumReleaseAge = 1209600
