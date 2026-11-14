@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTable } from "../ats/reader.ts";
 import { close as closeDb } from "./db.ts";
+import { setLookup } from "./http.ts";
 import { close } from "./index-db.ts";
 import { setSignedIn } from "./model.ts";
 import { setOnline } from "./online.ts";
@@ -17,6 +18,7 @@ export function tempData(): { dir: string; cleanup: () => void } {
   setSignedIn({ in: false, plan: null }); // never this Mac's Claude Code login: a test signs in itself
   setOnline(true); // never this Mac's network: a test goes offline itself
   setTable([]); // never the shipped boards table: a test gives its own rows
+  setLookup(async () => [{ address: "93.184.215.14", family: 4 }]); // never this Mac's DNS: a test gives its own answers
   ensureLayout();
   return {
     dir,

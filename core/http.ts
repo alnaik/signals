@@ -63,6 +63,15 @@ export function refuseLinkedIn(url: string | URL): void {
     throw Object.assign(new Error("LinkedIn pages are never read"), { linkedin: true });
 }
 
+type Lookup = (host: string) => Promise<{ address: string; family: number }[]>;
+const dns: Lookup = (host) => lookup(host, { all: true });
+let lookupHost = dns;
+
+/** Tests: the addresses to answer for a host, or null for this Mac's DNS. */
+export function setLookup(fn: Lookup | null): void {
+  lookupHost = fn ?? dns;
+}
+
 /**
  * Refuse a host any of whose addresses is private, loopback, link-local or reserved. A known limit:
  * the name is looked up here and again by the fetch that follows, so a name that answers a public
@@ -71,7 +80,7 @@ export function refuseLinkedIn(url: string | URL): void {
  */
 export async function assertPublicHost(host: string): Promise<void> {
   const h = host.replace(/^\[|\]$/g, "");
-  const addrs = isIP(h) ? [{ address: h, family: isIP(h) }] : await lookup(h, { all: true });
+  const addrs = isIP(h) ? [{ address: h, family: isIP(h) }] : await lookupHost(h);
   for (const a of addrs) {
     // IPv4-mapped IPv6 (::ffff:a.b.c.d) is checked as the IPv4 address it carries.
     const mapped = a.address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i)?.[1];

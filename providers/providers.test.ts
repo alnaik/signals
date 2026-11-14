@@ -7,7 +7,7 @@ import { paths } from "../core/paths.ts";
 import { tempData } from "../core/testing.ts";
 import { webSearch } from "../intake/search.ts";
 import { mcpProviders } from "./mcp.ts";
-import { search, setProviders, waterfall } from "./registry.ts";
+import { call, search, setProviders, waterfall } from "./registry.ts";
 import type { Provider } from "./types.ts";
 
 const data = tempData();
@@ -50,6 +50,20 @@ test("providers that need a missing key are skipped; failures fall through", asy
   const r = await waterfall("search", ["x", {}], { station: "test" }, (x: unknown[]) => x.length > 0);
   expect(r.by).toBe("ok");
   expect(r.steps).toEqual([expect.objectContaining({ provider: "broken", error: "503" }), expect.anything()]);
+});
+
+test("a read of anything but a web page is refused before the provider runs", async () => {
+  let ran = false;
+  const reader = fake("reader", 0, 0, {
+    read: async () => {
+      ran = true;
+      return { url: "", text: "", fetched_at: "" };
+    },
+  });
+  await expect(call(reader, "read", ["file:///etc/passwd"], { station: "test" })).rejects.toThrow(
+    "Only web pages are read",
+  );
+  expect(ran).toBe(false);
 });
 
 test("an MCP server's tool becomes a provider through config alone", async () => {

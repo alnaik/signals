@@ -18,6 +18,12 @@ Return:
 curl -fsSL https://raw.githubusercontent.com/alnaik/signals/main/scripts/install.sh | bash
 ```
 
+Or, if you use Claude Code, paste this into it:
+
+```text
+Set up Job Signal on my Mac from https://github.com/alnaik/signals: read its README, run its install line, and tell me when the board is open in my browser.
+```
+
 What happens next:
 
 1. It installs what Job Signal needs, if your Mac doesn't have it yet: Bun (what Job Signal runs
@@ -25,7 +31,8 @@ What happens next:
 2. It makes a folder for your data, `JobSignal`, in your home folder.
 3. It starts Job Signal in the background and opens it in your web browser.
 4. A first run of six short steps sets you up: about you, the model, a search provider, your
-   signals, applying, and your positioning. Only the first is needed. Skip the rest and come back
+   signals, applying, and your positioning. Applying is where you add the Job Signal extension to
+   Chrome; the app walks you through it. Only the first step is needed. Skip the rest and come back
    to them later.
 5. You land on **Sources**, which shows what is on and what to set up next.
 
@@ -33,7 +40,38 @@ The background reading starts once you finish the first run.
 
 ![First run, step 1 of 6: your name, where you want to work, and the words a role's title should have](docs/img/first-run.png)
 
-That is all you need to start. The rest of this page is for when you want to know more.
+That is all you need to start. Updating, uninstalling and the developer commands come next; the
+rest of this page is for when you want to know more.
+
+### Update and uninstall
+
+To update, paste the install line again. Your data folder is kept.
+
+To uninstall, in Terminal:
+
+```sh
+cat ~/.jobsignal 2>/dev/null || echo ~/JobSignal       # where your data folder is: note it first
+~/.local/bin/jobsignal schedule uninstall              # stop the board and the background check
+rm -rf ~/.jobsignal-app ~/.local/bin/jobsignal ~/.jobsignal
+```
+
+The first line matters only if you moved your data folder at first run: `~/.jobsignal` remembers
+where it is, and the last line removes it. Then, if you want them gone too: delete that data folder
+(your data), remove the keys in Keychain Access (search for "jobsignal"), remove the extension at
+`chrome://extensions`, and delete the browser used to read pages, `~/Library/Caches/ms-playwright`
+(unless something else of yours uses Playwright). Bun and Claude Code stay installed.
+
+### For developers
+
+Personal data lives in the data folder (default `~/JobSignal`, or `JOBSIGNAL_DATA`), never in the
+repo.
+
+```sh
+bun ci                             # install exactly what bun.lock says
+bunx playwright install chromium   # the browser the Apply and extension tests drive
+bun run check                      # lint, typecheck, tests
+bun bin/jobsignal.ts               # list commands
+```
 
 ## How you use it
 
@@ -137,24 +175,6 @@ you set ($5 to start). Details: [docs/spend.md](docs/spend.md).
 - Optional: a Claude subscription or an Anthropic API key, for the model steps (sorting posts,
   reading some careers pages, Work). Without one, those steps wait and Sources says so.
 
-### Update and uninstall
-
-To update, paste the install line again. Your data folder is kept.
-
-To uninstall, in Terminal:
-
-```sh
-cat ~/.jobsignal 2>/dev/null || echo ~/JobSignal       # where your data folder is: note it first
-~/.local/bin/jobsignal schedule uninstall              # stop the board and the background check
-rm -rf ~/.jobsignal-app ~/.local/bin/jobsignal ~/.jobsignal
-```
-
-The first line matters only if you moved your data folder at first run: `~/.jobsignal` remembers
-where it is, and the last line removes it. Then, if you want them gone too: delete that data folder
-(your data), remove the keys in Keychain Access (search for "jobsignal"), remove the extension at
-`chrome://extensions`, and delete the browser used to read pages, `~/Library/Caches/ms-playwright`
-(unless something else of yours uses Playwright). Bun and Claude Code stay installed.
-
 ### When something breaks
 
 The board shows **Problems**. **Copy bug report** copies a report you can paste into an issue or
@@ -170,17 +190,6 @@ into Claude Code. It names keys only as set or not set and holds none of your pr
 - [Gmail](docs/gmail-setup.md): connecting Gmail for replies
 - [Intake rules](docs/intake-rules.md): every rule from a signal to a role, in full
 - [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
-
-### For developers
-
-Personal data lives in the data folder (default `~/JobSignal`, or `JOBSIGNAL_DATA`), never in the
-repo.
-
-```sh
-bun ci                 # install exactly what bun.lock says
-bun run check          # lint, typecheck, tests
-bun bin/jobsignal.ts   # list commands
-```
 
 ### Credits and licence
 

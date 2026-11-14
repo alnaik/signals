@@ -1,7 +1,10 @@
 name: ci
 # Pull requests run here with a read-only token and no secrets (pull_request, never
 # pull_request_target). Every action is pinned to a commit.
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 permissions:
   contents: read
 jobs:
@@ -20,8 +23,8 @@ jobs:
       - run: bun audit
       - run: bun run check
   secrets:
-    # No key, token or password in any commit: gitleaks over the whole history, with the two
-    # public values in .gitleaks.toml allowed.
+    # No key, token or password in any commit: gitleaks over the whole history, with the one
+    # public value in .gitleaks.toml allowed.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

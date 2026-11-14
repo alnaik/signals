@@ -6,6 +6,7 @@ import type {
   MessageBatchIndividualResponse,
 } from "@anthropic-ai/sdk/resources/messages/batches";
 import { close, open } from "../core/db.ts";
+import { setLookup } from "../core/http.ts";
 import { setSecret } from "../core/keychain.ts";
 import { entries } from "../core/ledger.ts";
 import { setSignedIn } from "../core/model.ts";
@@ -285,6 +286,7 @@ test("a short link is followed only to public addresses, each checked before it 
     asked.push(String(input));
     return new Response(null, { status: 301, headers: { location: "https://inside.invalid/admin" } });
   }) as typeof fetch;
+  setLookup(async () => [{ address: "10.0.0.1", family: 4 }]); // inside.invalid points inside
   try {
     // A name that doesn't point to a public address is named, never asked.
     expect(await followLink("https://93.184.215.14/a")).toBe("https://inside.invalid/admin");
@@ -293,5 +295,6 @@ test("a short link is followed only to public addresses, each checked before it 
     expect(asked).toHaveLength(1);
   } finally {
     globalThis.fetch = realFetch;
+    setLookup(async () => [{ address: "93.184.215.14", family: 4 }]); // back to tempData's answer
   }
 });

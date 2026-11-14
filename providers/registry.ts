@@ -107,6 +107,14 @@ export function billedFailure(err: unknown): boolean {
   return typeof status !== "number" || status === 404;
 }
 
+const webLink = (url: string): boolean => {
+  try {
+    return ["http:", "https:"].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+};
+
 /** Run one capability on one provider, recording its cost. */
 export async function call<C extends Capability>(
   p: Provider,
@@ -130,6 +138,8 @@ export async function call<C extends Capability>(
   if (!fn) throw new Error(`${p.name} has no ${cap}`);
   // A page read through a provider is still a page read: never LinkedIn's.
   if (cap === "read" && isLinkedIn(String(args[0]))) throw new Error("LinkedIn pages are never read");
+  // And only a web page: never a file or another scheme, which a reader could be handed and open.
+  if (cap === "read" && !webLink(String(args[0]))) throw new Error("Only web pages are read");
   const why = affordable(p, cap, args);
   if (why) {
     skips.push(`${p.label} skipped · ${why}`);

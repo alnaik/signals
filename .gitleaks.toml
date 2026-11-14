@@ -1,4 +1,4 @@
-# gitleaks (run in CI): its default rules, less two public values that are not secrets.
+# gitleaks (run in CI): its default rules, less one public value that is not a secret.
 [extend]
 useDefault = true
 
@@ -6,7 +6,3 @@ useDefault = true
 description = "An RSA public key (the Chrome extension's, in extension/id.ts: Chrome derives the extension's ID from it)"
 regexTarget = "match"
 regexes = ['''MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA[A-Za-z0-9+/=]+''']
-
-[[allowlists]]
-description = "A public key baked into a job site's own web page, in a vendored file this commit added and a later one removed"
-commits = ["787c2948b70d42ab60295ce627f232c0fc4239af"]

@@ -5,8 +5,9 @@ Thank you for wanting to help. A few rules keep Job Signal safe and simple.
 - **Pull requests are merged only when the owner approves them.** Please open an issue first for
   anything bigger than a small fix, so we can agree on it before you build it.
 - **One change per pull request.** A fix and an unrelated tidy-up are two pull requests.
-- **`bun run check` must pass** (lint, typecheck and tests). Add a test when your change guards
-  safety, money or data, or fixes a bug; not otherwise.
+- **`bun run check` must pass** (lint, typecheck and tests). Set up once with `bun ci`, then
+  `bunx playwright install chromium` (the browser the Apply and extension tests drive). Add a test
+  when your change guards safety, money or data, or fixes a bug; not otherwise.
 - **No real personal data in tests or fixtures**: no real person's name, CV, mail or handle, and
   no saved copies of other people's or companies' pages. Invent them.
 - **No new network call without the guards.** Read the web only through `politeGet` in
