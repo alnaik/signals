@@ -1741,9 +1741,9 @@ textarea {
   align-self: flex-start;
 }
 
-/* The north star (northstar/board.tsx). Wide windows: a column in the left margin beside the
-   1,180 px frame, the line from the star to the foot of the page. Narrower ones: a tab under the
-   top bar that opens a band, pushing the page down. */
+/* The north star (northstar/board.tsx). Windows from 1,600 px: a column in the left margin beside
+   the 1,180 px frame, the line from the star to the foot of the page; 190 px wide, 250 px from
+   1,720 px. Narrower ones: a tab under the top bar that opens a band, pushing the page down. */
 .ns-margin {
   display: none;
 }
@@ -1887,19 +1887,52 @@ textarea {
   flex: 1 1 280px;
   max-width: none;
 }
-/* Room for a 250 px column beside the frame: the margin, and no tab. */
-@media (min-width: 1720px) {
+/* Room for a 190 px column and its 20 px gap beside the frame: the margin, slimmer, and no tab. */
+@media (min-width: 1600px) {
   .ns-margin {
     display: block;
     position: absolute;
     top: 0;
     bottom: 0;
-    left: calc(50% - 590px - 270px);
-    width: 250px;
+    left: calc(50% - 590px - 210px);
+    width: 190px;
     padding-top: 26px;
   }
   .ns-tuck {
     display: none;
+  }
+  .ns-star {
+    left: 14px;
+  }
+  .ns-words {
+    margin-left: 40px;
+  }
+  .ns-margin .ns-text {
+    font-size: 28px;
+    max-width: 150px;
+  }
+  .ns-margin .ns-why {
+    max-width: 150px;
+  }
+}
+/* Room for the full 250 px column. */
+@media (min-width: 1720px) {
+  .ns-margin {
+    left: calc(50% - 590px - 270px);
+    width: 250px;
+  }
+  .ns-star {
+    left: 24px;
+  }
+  .ns-words {
+    margin-left: 54px;
+  }
+  .ns-margin .ns-text {
+    font-size: 34px;
+    max-width: 196px;
+  }
+  .ns-margin .ns-why {
+    max-width: 190px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

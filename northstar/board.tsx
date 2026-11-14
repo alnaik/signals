@@ -26,17 +26,17 @@ function seeded(text: string): () => number {
 /**
  * The line: it leaves the star straight beside the words, then, once below them (`free`, in
  * pixels from the top), sways wider and at a few places doubles back into a loop, down to `height`.
- * With no words it runs straight.
+ * With no words it runs straight. `x0` is the star's middle; `scale` narrows the sway for a slimmer
+ * column (1 for the full 250 px one).
  */
-export function linePath(words: string, height: number, free: number): string {
-  const x0 = 31.5;
+export function linePath(words: string, height: number, free: number, x0 = 31.5, scale = 1): string {
   const y0 = 46;
   const run = Math.max(1, height - y0 + 4);
   const rnd = seeded(words);
   const cycles = Math.max(6, Math.round(run / (90 + 40 * rnd())));
   const phase = rnd() * Math.PI * 2;
-  const swing = words ? 24 + 18 * rnd() : 0;
-  const reach = 60 + 36 * rnd();
+  const swing = words ? (24 + 18 * rnd()) * scale : 0;
+  const reach = (60 + 36 * rnd()) * scale;
   const f0 = Math.min(0.8, Math.max(0, (free - y0) / run));
   const f1 = Math.min(0.9, f0 + 160 / run);
   const loops: { at: number; w: number; turn: number }[] = [];
@@ -63,7 +63,7 @@ export function linePath(words: string, height: number, free: number): string {
     let ly = 0;
     for (const l of loops) {
       const pull = need * 2.3 * bump(s, l.at, l.w);
-      lx += l.turn * pull * Math.cos(a);
+      lx += l.turn * pull * scale * Math.cos(a);
       ly += pull * Math.sin(a);
     }
     const x = x0 + reach * out + swing * out * Math.sin(a * 0.5 + phase) + lx;
@@ -117,22 +117,26 @@ function NorthStar() {
     setMeta(saved.text ? written(saved.at) : "");
   }, [saved, show]);
 
-  // The line, drawn again when the sentence is kept and when the page's height changes; never
+  // The line, drawn again when the sentence is kept and when the column's size changes; never
   // while you type.
   const draw = useCallback(() => {
     const m = margin.current;
     if (!m || !path.current || !saved || m.offsetParent === null) return;
     const free = (words.current?.offsetTop ?? 0) + (words.current?.offsetHeight ?? 0) + 18;
-    path.current.setAttribute("d", linePath(saved.text, m.clientHeight, free));
+    // From the star's middle, wherever the column puts it, and only as wide as the column allows.
+    const star = m.querySelector(".ns-star")?.getBoundingClientRect();
+    const x0 = star ? star.left + star.width / 2 - m.getBoundingClientRect().left : 31.5;
+    path.current.setAttribute("d", linePath(saved.text, m.clientHeight, free, x0, m.clientWidth / 250));
   }, [saved]);
   useEffect(() => {
     draw();
     const m = margin.current;
     if (!m) return;
-    let last = -1;
+    let last = "";
     const ro = new ResizeObserver(() => {
-      if (m.clientHeight === last) return;
-      last = m.clientHeight;
+      const size = `${m.clientWidth}x${m.clientHeight}`;
+      if (size === last) return;
+      last = size;
       draw();
     });
     ro.observe(m);
