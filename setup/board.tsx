@@ -1093,7 +1093,7 @@ const setup: BoardFeature = {
   },
   gate: (ctx) => (needsSetup ? <FirstRun ctx={ctx} /> : null),
   topBar: (ctx) => (
-    <button type="button" onClick={() => ctx.page("settings")}>
+    <button type="button" className="top-link" onClick={() => ctx.page("settings")}>
       Settings
     </button>
   ),

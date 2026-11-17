@@ -88,16 +88,19 @@ export function AddBox({ ctx, compact = false }: { ctx: Ctx; compact?: boolean }
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && input.trim() && go()}
-        style={{ width: compact ? 180 : 380 }}
+        style={{ width: compact ? 120 : 380 }}
       />
-      <button
-        type="button"
-        className={compact ? "" : "primary"}
-        disabled={!input.trim()}
-        onClick={() => go()}
-      >
-        Add
-      </button>
+      {/* In the top bar, Add shows once something is typed (Enter adds too): room for one line. */}
+      {(!compact || input.trim()) && (
+        <button
+          type="button"
+          className={compact ? "" : "primary"}
+          disabled={!input.trim()}
+          onClick={() => go()}
+        >
+          Add
+        </button>
+      )}
       {ask && (
         <span className="reason-row">
           <span className="muted">{ask.ask}</span>

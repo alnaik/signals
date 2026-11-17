@@ -6,7 +6,7 @@ import { jsonLdJobs } from "../ats/careers.ts";
 import { publicRequests } from "../ats/render.ts";
 import { lock } from "../intake/run.ts";
 import { mcpProviders } from "../providers/mcp.ts";
-import { search, setProviders, setRunBudget } from "../providers/registry.ts";
+import { search, setProviders, withRunBudget } from "../providers/registry.ts";
 import type { Provider } from "../providers/types.ts";
 import { assertPublicHost, isPublicUrl, politeGet, readCapped } from "./http.ts";
 import { paths } from "./paths.ts";
@@ -17,7 +17,6 @@ const data = tempData();
 afterAll(data.cleanup);
 afterEach(() => {
   setProviders(null);
-  setRunBudget(null);
 });
 
 test("thread paths refuse anything but a domain", () => {
@@ -48,9 +47,13 @@ test("paid lookups stop at the run budget and fall through to free ones", async 
   };
   setProviders([paid, free]);
   writeFileSync(paths.config(), '[caps]\nmonth_usd = 100\n[providers]\nsearch = ["paid", "free"]\n');
-  setRunBudget(0.12);
-  const steps = [];
-  for (let i = 0; i < 3; i++) steps.push((await search("q", {}, { station: "worker" })).steps[0]);
+  const steps = (
+    await withRunBudget(0.12, async () => {
+      const out = [];
+      for (let i = 0; i < 3; i++) out.push((await search("q", {}, { station: "worker" })).steps[0]);
+      return out;
+    })
+  ).result;
   expect(steps.map((s) => s?.error ?? "ran")).toEqual([
     "ran",
     "ran",

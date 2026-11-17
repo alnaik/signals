@@ -127,7 +127,7 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   padding: 16px 0;
   border-bottom: 1px solid var(--ink);
 }
@@ -177,11 +177,37 @@ textarea {
 .segmented button {
   border: 0;
   border-radius: 0;
-  padding: 7px 12px;
+  padding: 7px 9px;
 }
 .segmented button[aria-pressed="true"] {
   background: var(--ink);
   color: var(--paper);
+}
+/* The top bar's right side: the actions (Add, Look up), then the page links as plain words. */
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar-tools button {
+  padding: 6px 10px;
+}
+.topbar-tools input {
+  padding: 5px 8px;
+}
+.topbar-tools .top-link {
+  order: 1;
+  border: 0;
+  background: none;
+  padding: 6px 2px;
+  font-size: 12.5px;
+}
+.topbar-tools .top-link:hover {
+  text-decoration: underline;
+}
+.topbar-tools .lk-done {
+  border-color: var(--ink);
+  font-weight: 600;
 }
 
 .layout {
@@ -737,6 +763,60 @@ textarea {
   gap: 6px;
   width: 100%;
   align-items: center;
+}
+
+/* Look up (lookup/board.tsx): a panel like the drawer, above it when both are open. */
+.lk-scrim {
+  z-index: 20;
+}
+.lk-panel {
+  z-index: 21;
+}
+.lk-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lk-field {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+.lk-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+}
+.lk-item {
+  border-top: 1px solid var(--line);
+}
+.lk-item-head {
+  width: 100%;
+  border: 0;
+  padding: 10px 0;
+  background: none;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  align-items: baseline;
+}
+.lk-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+.lk-person {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--surface-2);
 }
 
 /* Toast */

@@ -35,6 +35,11 @@ const live: BoardFeature = {
         new CustomEvent("refresh.progress", { detail: JSON.parse((e as MessageEvent).data) }),
       ),
     );
+    es.addEventListener("lookup.changed", (e) =>
+      window.dispatchEvent(
+        new CustomEvent("lookup.changed", { detail: JSON.parse((e as MessageEvent).data) }),
+      ),
+    );
     es.addEventListener("toast", (e) =>
       window.dispatchEvent(new CustomEvent("toast", { detail: JSON.parse((e as MessageEvent).data).text })),
     );

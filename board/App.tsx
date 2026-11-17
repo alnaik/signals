@@ -186,11 +186,14 @@ export function App() {
               </button>
             )}
           </div>
-          {registry.map((f) => (
-            <span key={f.name} style={{ display: "contents" }}>
-              {f.topBar?.(ctx)}
-            </span>
-          ))}
+          {/* Actions first (Add, Look up), then the page links, close together: one line at 1,180 px. */}
+          <div className="topbar-tools">
+            {registry.map((f) => (
+              <span key={f.name} style={{ display: "contents" }}>
+                {f.topBar?.(ctx)}
+              </span>
+            ))}
+          </div>
         </header>
         {registry.map((f) => (
           <span key={f.name} style={{ display: "contents" }}>

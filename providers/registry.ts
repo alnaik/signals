@@ -1,6 +1,7 @@
 // Provider registry and the waterfall. Every call goes through `call`, which records
 // its cost in the ledger. Providers are files in providers/ plus MCP tools from config.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { Glob } from "bun";
 import { isLinkedIn } from "../apply/linkedin.ts";
@@ -64,17 +65,21 @@ export async function getProvider(name: string): Promise<Provider | undefined> {
 
 type Ctx = { station: string; thread?: string };
 
-// A Work run's provider budget. Paid calls past it, or past the monthly cap, are skipped so the
-// waterfall falls through to free providers; what was skipped is kept for the thread to show.
-let budget: { usd: number; spent: number } | null = null;
-let skips: string[] = [];
-export function setRunBudget(usd: number | null): void {
-  budget = usd === null ? null : { usd, spent: 0 };
-  skips = [];
-}
-/** The paid steps skipped since the run budget was set ("Hunter skipped · monthly cap"). */
-export function skipped(): string[] {
-  return [...new Set(skips)];
+// A run's provider budget (a Work run, one lookup). Paid calls past it, or past the monthly cap, are
+// skipped so the waterfall falls through to free providers; what was skipped is kept for the run
+// to show. Each run's budget follows its own calls (AsyncLocalStorage): a lookup pressed during a
+// Work run neither spends Work's budget nor lands its skips on the Work thread.
+type Budget = { usd: number; spent: number; skips: string[] };
+const budgets = new AsyncLocalStorage<Budget>();
+
+/** Run `fn` with its own provider budget; says what it spent and which paid steps it skipped. */
+export async function withRunBudget<T>(
+  usd: number,
+  fn: () => Promise<T>,
+): Promise<{ result: T; spent: number; skipped: string[] }> {
+  const b: Budget = { usd, spent: 0, skips: [] };
+  const result = await budgets.run(b, fn);
+  return { result, spent: b.spent, skipped: [...new Set(b.skips)] };
 }
 
 /** A config price override ([provider.<name>] cost = { search = 0.007 }), if there is one. */
@@ -92,6 +97,7 @@ export function declaredCost(p: Provider, cap: Capability, args: unknown[] = [])
 function affordable(p: Provider, cap: Capability, args: unknown[]): string | null {
   const est = declaredCost(p, cap, args) ?? 0;
   if (est <= 0) return null;
+  const budget = budgets.getStore();
   if (budget && budget.spent + est > budget.usd + 1e-9) return "this run's lookup budget";
   if (!canSpend(est)) return "monthly cap";
   return null;
@@ -142,7 +148,7 @@ export async function call<C extends Capability>(
   if (cap === "read" && !webLink(String(args[0]))) throw new Error("Only web pages are read");
   const why = affordable(p, cap, args);
   if (why) {
-    skips.push(`${p.label} skipped · ${why}`);
+    budgets.getStore()?.skips.push(`${p.label} skipped · ${why}`);
     throw new Error(`${p.label} skipped · ${why}`);
   }
   let out: unknown;
@@ -156,6 +162,7 @@ export async function call<C extends Capability>(
   } finally {
     const usd = failed && !billedFailure(failed) ? 0 : (p.lastCost?.(out) ?? declaredCost(p, cap, args) ?? 0);
     const usage = failed ? undefined : p.lastUsage?.(out);
+    const budget = budgets.getStore();
     if (budget) budget.spent += usd;
     record({
       kind: "provider",

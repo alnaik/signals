@@ -250,6 +250,22 @@ export const MIGRATIONS: string[] = [
     FROM (SELECT id, max(received_at) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) AS a FROM signals) m
     WHERE m.id = signals.id;
   `,
+  `
+  -- Look up (lookup/lookup.ts): a person's email, or the people at a company, asked by hand and
+  -- run in the server; nothing reaches a thread until Save. The last 50 are kept, and the emails
+  -- they found 30 days unless saved to a thread.
+  CREATE TABLE lookups (
+    id INTEGER PRIMARY KEY,
+    mode TEXT NOT NULL,          -- person | people
+    inputs TEXT NOT NULL,        -- JSON: what was typed
+    status TEXT NOT NULL,        -- running | done | failed
+    results TEXT,                -- JSON {company, people: [{name, role, hits, saved}], error}
+    usd REAL NOT NULL DEFAULT 0, -- what its presses cost
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    seen_at TEXT                 -- shown in the panel once finished
+  );
+  `,
 ];
 
 // The meta keys the one-time repairs set once they ran (intake/repair.ts, sources/hn/index.ts).

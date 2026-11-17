@@ -28,7 +28,7 @@ import { setAgent } from "../core/state.ts";
 import { failure } from "../core/trace.ts";
 import { ulid } from "../core/ulid.ts";
 import { isRunNote } from "../core/vocab.ts";
-import { setRunBudget, skipped } from "../providers/registry.ts";
+import { withRunBudget } from "../providers/registry.ts";
 import { gather } from "./gather.ts";
 
 const SKILL = path.join(import.meta.dir, "SKILL.md");
@@ -241,7 +241,6 @@ export async function runWorker(id: string, progress: (line: string) => void = (
     setAgent("worker", "idle", `stopped · ${company}`);
     return { ok: false, reason };
   } finally {
-    setRunBudget(null);
     unlock();
   }
 }
@@ -285,13 +284,12 @@ async function work(
   const cfg = loadConfig();
   setAgent("worker", "working", `on ${company} · gathering`);
   // Paid lookups in the gather share one run's provider budget.
-  setRunBudget(cfg.caps.run_provider_usd);
-  const g = await gather(id, (line) => {
-    progress(line);
-    setAgent("worker", "working", `on ${company} · ${line}`);
-  });
-  const paidSkips = skipped();
-  setRunBudget(null);
+  const { result: g, skipped: paidSkips } = await withRunBudget(cfg.caps.run_provider_usd, () =>
+    gather(id, (line) => {
+      progress(line);
+      setAgent("worker", "working", `on ${company} · ${line}`);
+    }),
+  );
   const skips = [...g.skipped, ...paidSkips];
   if (skips.length)
     append(id, {

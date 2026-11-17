@@ -22,7 +22,7 @@ function ProblemsButton({ ctx }: { ctx: Ctx }) {
   const [list] = useProblems();
   if (!list.length) return null;
   return (
-    <button type="button" className="crit-text" onClick={() => ctx.page("report")}>
+    <button type="button" className="top-link crit-text" onClick={() => ctx.page("report")}>
       Problems · {list.length}
     </button>
   );

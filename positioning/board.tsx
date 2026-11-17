@@ -103,7 +103,7 @@ const positioning: BoardFeature = {
   name: "positioning",
   order: 40,
   topBar: (ctx) => (
-    <button type="button" onClick={() => ctx.page("positioning")}>
+    <button type="button" className="top-link" onClick={() => ctx.page("positioning")}>
       Positioning
     </button>
   ),

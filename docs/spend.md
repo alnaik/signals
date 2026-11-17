@@ -11,6 +11,7 @@ Job Signal pays for a model only where judgment is needed, and caps real money o
 | Discovery's web-search pick (`discover-pick`) | Haiku, one call per company searched | when discovery searches |
 | Board search's employer check (`board-search-employer`) | Haiku, one call per board whose company would be new (is it the employer, an agency or a job board?), and per Workday board (the same call names the employer from the posting's words: Workday gives only a payroll entity), kept | when board search runs |
 | Board search's web searches | none: one search per city × board host on the first web search connected, in the `[providers]` search order; `run_credits` (112) a run and `month_credits` (500) a month, counted in searches | weekly, when switched on |
+| Look up (`lookup`) | none: your own providers, in the `[providers]` contact order (Find a person, Find email) or people order (People at a company); each press says the most it can cost first and runs with that as its own budget, apart from Work's; inside `month_usd` | when you press Run or Find email in Look up (top bar, or Find an email on a thread) |
 | Careers-page reader (`read-page`) | Haiku, one call per careers page no reader reads, again only when its text changes and at most once a day; its own cap `pages_month_usd` ($3) | when discovery or a refresh reads such a page |
 
 Every model step runs on whichever connection there is: a signed-in Claude Code subscription

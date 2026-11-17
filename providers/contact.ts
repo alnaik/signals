@@ -2,7 +2,7 @@
 // sources, stopping once a verified email is in hand. Channels from every step are merged,
 // keeping the strongest confidence for each value.
 import { call, ordered } from "./registry.ts";
-import type { Confidence, ContactHit, PersonRef } from "./types.ts";
+import type { Confidence, ContactHit, PersonRef, Provider } from "./types.ts";
 
 const RANK: Record<Confidence, number> = { verified: 3, pattern: 2, guessed: 1 };
 
@@ -24,10 +24,12 @@ export function merge(hits: ContactHit[]): ContactHit[] {
 export async function findContact(
   person: PersonRef,
   ctx: { station: string; thread?: string },
+  asking: (p: Provider) => void = () => {},
 ): Promise<{ hits: ContactHit[]; steps: string[] }> {
   const hits: ContactHit[] = [];
   const steps: string[] = [];
   for (const p of await ordered("contact")) {
+    asking(p);
     try {
       const found = await call(p, "contact", [person], ctx);
       hits.push(...found);
