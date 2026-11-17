@@ -4,6 +4,7 @@
 // stopped at each step, why, and the retries that replace one-off batch scripts: one item, or all
 // of a reason at once, lined up for the tick, with progress and a Stop.
 import { isLinkedIn } from "../apply/linkedin.ts";
+import { atsRoot } from "../ats/reader.ts";
 import { loadConfig } from "../core/config.ts";
 import { DAY, getMeta, markChanged, open, setMeta, tx } from "../core/db.ts";
 import { backgroundLeft, canUseSmallModel, connection, DayLimit, NO_MODEL, OverCap } from "../core/model.ts";
@@ -13,6 +14,7 @@ import { ANSWERED, COMPANY_UNKNOWN, classifyOne, SET_ASIDE, SYSTEM } from "../in
 import { dismissCompany, getCompany, placeSignal, type Signal, signalsOf } from "../intake/companies.ts";
 import { discover, giveDomain } from "../intake/discover.ts";
 import { siteDomain } from "../intake/leads.ts";
+import { BY_HAND } from "../intake/refresh.ts";
 
 export const STEPS = ["signal", "named", "website", "board", "roles"] as const;
 export type Step = (typeof STEPS)[number];
@@ -407,7 +409,7 @@ export function items(
   const count = d.query("SELECT count(*) AS n FROM signals WHERE company_id = ?");
   const boards = d.query(
     `SELECT url, provider, status, last_read_at, last_error, role_count, next_read_at FROM boards
-     WHERE company_id = ? ORDER BY status = 'ok' DESC, id`,
+     WHERE company_id = ? AND status <> 'retired' ORDER BY status = 'ok' DESC, id`,
   );
   return rows.map((r) => {
     const id = r.id as number;
@@ -495,11 +497,11 @@ export function again(step: Step, ids: number[], now: Date): void {
       // A board found once that stopped working is read again too.
       if (step === "board")
         d.query(
-          `UPDATE boards SET status = 'ok', fails = 0, next_read_at = ? WHERE company_id IN (${list}) AND status <> 'ok'`,
+          `UPDATE boards SET status = 'ok', fails = 0, next_read_at = ? WHERE company_id IN (${list}) AND status = 'broken'`,
         ).run(iso);
     } else if (step === "roles")
       d.query(
-        `UPDATE boards SET status = 'ok', fails = 0, next_read_at = ? WHERE company_id IN (${list})`,
+        `UPDATE boards SET status = 'ok', fails = 0, next_read_at = ? WHERE company_id IN (${list}) AND status <> 'retired'`,
       ).run(iso);
     markChanged(now);
   });
@@ -778,7 +780,15 @@ export async function setByHand(step: Step, id: number, value: string, now = new
   if (isLinkedIn(url))
     throw new Error("LinkedIn pages are never read: give its own careers page or job board");
   reading.add(id);
-  void discover([c], now, url)
+  // Any page of the board, filtered or not, stands for the board itself (jobs.ashbyhq.com/acme).
+  // The board it finds is yours: its first read with roles retires the company's empty boards.
+  void discover([c], now, atsRoot(url))
+    .then((found) => {
+      const mine = open().query(
+        "UPDATE boards SET found_by = ? WHERE company_id = ? AND url = ? AND last_read_at IS NULL",
+      );
+      for (const f of found) if (f.board) mine.run(BY_HAND, f.companyId, f.board);
+    })
     .catch(() => {})
     .finally(() => {
       reading.delete(id);

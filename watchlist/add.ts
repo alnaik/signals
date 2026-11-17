@@ -115,7 +115,7 @@ export function plainProblem(note: string): string {
 export function boardOf(c: Company): BoardState {
   const b = open()
     .query(
-      "SELECT provider, url, status, partial, last_error FROM boards WHERE company_id = ? ORDER BY status = 'ok' DESC, id LIMIT 1",
+      "SELECT provider, url, status, partial, last_error FROM boards WHERE company_id = ? AND status <> 'retired' ORDER BY status = 'ok' DESC, id LIMIT 1",
     )
     .get(c.id) as {
     provider: string;

@@ -21,6 +21,9 @@ The last section is for people who want to change it.
    boards table that ships with the app (`ats/boards.csv`), the company's own site, then one web
    search if you connected a search provider. Greenhouse, Lever, Ashby, Workday and more than 80
    others are read directly. A careers page none of them reads is read by the small model.
+   When it picked the wrong one, **Change its board** (on the company's page and in its thread)
+   takes any page of the right board, filtered or not; once that board lists roles, the old ones
+   that listed none are retired: kept, but never read or shown again.
 5. **Roles read.** Every open role on the board is read, about every 6 hours while the company is
    active, daily after that. A role that disappears twice in a row is closed.
 

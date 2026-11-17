@@ -144,6 +144,13 @@ export const feature: ServerFeature = {
         return json({ toast: `Watching ${c.name}`, watched: true });
       },
     },
+    // The thread's company and its board, for the drawer's Change its board.
+    "/api/threads/:id/board": {
+      GET: (req) => {
+        const c = companyOfThread(req.params.id);
+        return json(c ? { company: c.id, name: c.name, board: boardOf(c) } : { company: null });
+      },
+    },
     "/api/watchlist/:cid/remove": {
       POST: (req) => {
         const id = num(req.params.cid);

@@ -352,7 +352,7 @@ function describe(rows: (Company & { n: number; at: string; held?: number })[], 
   const boards = d
     .query(
       `SELECT company_id, url, provider, status, partial FROM boards WHERE company_id IN (${marks})
-       ORDER BY status = 'ok' DESC, id`,
+         AND status <> 'retired' ORDER BY status = 'ok' DESC, id`,
     )
     .all(...ids) as { company_id: number; url: string; provider: string; status: string; partial: number }[];
   const signals = d

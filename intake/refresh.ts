@@ -42,7 +42,7 @@ export type Board = {
   provider: string;
   url: string;
   key: string;
-  status: "ok" | "broken";
+  status: "ok" | "broken" | "retired"; // retired: replaced by a board you gave, never read or shown
   partial: number;
   found_by: string | null;
   list_hash: string | null;
@@ -654,7 +654,27 @@ export function applyRead(
         board: b.id,
       },
     );
+  if (!b.last_read_at && b.found_by === BY_HAND && jobs.length) retireOthers(b, now);
   return { ...base, status: suspect ? "suspect" : "changed", added, closed, listed: jobs.length };
+}
+
+/** found_by of a board you gave (Change its board, Paste its board, Sources' by-hand step). */
+export const BY_HAND = "by hand";
+
+/**
+ * A board you gave read its first roles: the company's other boards that list none (the careers
+ * page that read empty) are retired, never read or shown again. Their rows stay; a board with an
+ * open role stays as it is.
+ */
+function retireOthers(b: Board, now: Date): void {
+  const n = open()
+    .query(
+      `UPDATE boards SET status = 'retired', next_read_at = NULL, lease_until = NULL
+       WHERE company_id = ? AND id <> ? AND status <> 'retired'
+         AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.board_id = boards.id AND r.closed_at IS NULL)`,
+    )
+    .run(b.company_id, b.id).changes;
+  if (n) markChanged(now);
 }
 
 /** One row per board id: a board that lists a role twice (two locations) keeps the first. */

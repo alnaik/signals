@@ -126,6 +126,110 @@ function boardLine(b: BoardState): string {
   return `${b.provider}${b.partial ? " (partial: read through its search)" : ""} · ${b.url}`;
 }
 
+/**
+ * Change its board: any page of another board (an Ashby link, filtered or not) or a careers page,
+ * through Sources' by-hand step. Looked at now; once it reads roles, the company's old boards that
+ * found none are retired (intake/refresh.ts retireOthers).
+ */
+export function ChangeBoard({
+  ctx,
+  id,
+  name,
+  label = "Change its board",
+  lead = " · ",
+  onDone,
+}: {
+  ctx: Ctx;
+  id: number;
+  name: string;
+  label?: string;
+  lead?: string; // before the link, on the line it ends; the field opens on a line of its own
+  onDone?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [given, setGiven] = useState("");
+  if (!open)
+    return (
+      <>
+        {lead}
+        <button
+          type="button"
+          className="link"
+          title="Give its careers page or job board yourself"
+          onClick={() => {
+            setOpen(true);
+            setGiven("");
+          }}
+        >
+          {label}
+        </button>
+      </>
+    );
+  return (
+    <form
+      className="sig-paste"
+      style={{ margin: "6px 0 0" }}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const res = await ctx.post("/api/sources/hand", { step: "board", id, value: given });
+        const out = await res.json().catch(() => ({ toast: "Something went wrong" }));
+        if (!res.ok) return ctx.toast(out.toast ?? "That didn't work");
+        ctx.toast(
+          `${name}: the page is looked at now, and its roles read at the next read, within 15 minutes. Once it lists roles, the old board that found none is retired.`,
+        );
+        setOpen(false);
+        onDone?.();
+      }}
+    >
+      <div>
+        <label htmlFor={`board-${id}`}>Careers page or job board</label>
+        <input
+          id={`board-${id}`}
+          // biome-ignore lint/a11y/noAutofocus: the field opens on your click, to type in at once
+          autoFocus
+          placeholder="jobs.ashbyhq.com/example"
+          value={given}
+          onChange={(e) => setGiven(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              setOpen(false);
+            }
+          }}
+        />
+      </div>
+      <button type="submit" className="small primary" disabled={!given.trim()}>
+        Save
+      </button>
+      <button type="button" className="small" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+/** In a thread's drawer: the company's board, and Change its board. */
+function DrawerBoard({ id, ctx }: { id: string; ctx: Ctx }) {
+  const [b] = useJson<{ company: number | null; name?: string; board?: BoardState }>(
+    `/api/threads/${encodeURIComponent(id)}/board`,
+  );
+  if (!b?.company || !b.board) return null;
+  return (
+    <section className="d-sec" style={{ gap: 4 }}>
+      <div className="d-label">Board</div>
+      <div className="muted" style={{ overflowWrap: "anywhere" }}>
+        {boardLine(b.board)}
+        <ChangeBoard
+          ctx={ctx}
+          id={b.company}
+          name={b.name ?? ""}
+          label={b.board.provider ? undefined : "Give its board"}
+        />
+      </div>
+    </section>
+  );
+}
+
 function WatchlistPage({ ctx }: { ctx: Ctx }) {
   const [data] = useJson<{ companies: Company[] }>("/api/watchlist");
   const adding = useAdding();
@@ -393,6 +497,7 @@ function CompanyPage({ ctx, id }: { ctx: Ctx; id: string }) {
             </>
           )}
           {c.lastRead && !line && <span className="faint"> · read {age(c.lastRead)}</span>}
+          {!line && c.board.provider && <ChangeBoard ctx={ctx} id={c.id} name={c.name} />}
         </div>
         {c.funding && (
           <div className="muted">
@@ -459,6 +564,7 @@ const watchlist: BoardFeature = {
   name: "watchlist",
   order: 6,
   footer: (d, ctx) => <WatchButton key={d.id} id={d.id} ctx={ctx} />,
+  drawerSections: (d, ctx) => <DrawerBoard key={d.id} id={d.id} ctx={ctx} />,
   topBar: (ctx) => <AddBox ctx={ctx} compact />,
   pages: {
     watchlist: (ctx) => <WatchlistPage ctx={ctx} />,

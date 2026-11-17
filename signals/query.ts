@@ -123,7 +123,7 @@ const STAGED = `
       (SELECT count(*) FROM roles r WHERE r.company_id = c.id AND r.closed_at IS NULL AND r.fits = 0
          AND r.matched IS NOT NULL) AS near,
       EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id AND b.status = 'ok') AS ok_board,
-      EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id) AS any_board,
+      EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id AND b.status <> 'retired') AS any_board,
       EXISTS (SELECT 1 FROM signals s WHERE s.company_id = c.id AND s.source = 'hn') AS hn,
       EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id AND b.status = 'ok' AND b.last_read_at IS NULL) AS unread_board
     FROM companies c LEFT JOIN sig ON sig.company_id = c.id
@@ -411,7 +411,7 @@ function describe(rows: Row[]): SignalsCompany[] {
   const boards = d
     .query(
       `SELECT company_id, url, provider, status FROM boards WHERE company_id IN (SELECT value FROM json_each($ids))
-       ORDER BY status = 'ok' DESC, id`,
+         AND status <> 'retired' ORDER BY status = 'ok' DESC, id`,
     )
     .all({ ids }) as { company_id: number; url: string; provider: string; status: string }[];
   const near = d
