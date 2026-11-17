@@ -30,7 +30,7 @@ import {
   runBoards,
   sharesWord,
 } from "../ats/reader.ts";
-import { type Renderer, renderer } from "../ats/render.ts";
+import { noBrowser, type Renderer, renderer } from "../ats/render.ts";
 import { loadConfig } from "../core/config.ts";
 import { open } from "../core/db.ts";
 import { robotsAllowed } from "../core/http.ts";
@@ -98,12 +98,12 @@ async function boardOn(c: Company, page: { url: string; links: string[]; html?: 
 }
 
 /**
- * One company's careers page, read; null when the model is needed and can't run, or discovery's
- * deadline passed before the read was whole (no model call is started past it). A front page
- * that shows no roles, or a featured few, and links to its full listing on the same site
- * (Databricks' "See open jobs", Meta's one featured role) has that one page read too, by the same
- * steps, and the listing's board or roles are kept when they are more: its address is saved, so
- * a refresh reads the listing itself.
+ * One company's careers page, read; null when the model is needed and can't run, this Mac has no
+ * browser to render it, or discovery's deadline passed before the read was whole (no model call is
+ * started past it). A front page that shows no roles, or a featured few, and links to its full
+ * listing on the same site (Databricks' "See open jobs", Meta's one featured role) has that one page
+ * read too, by the same steps, and the listing's board or roles are kept when they are more: its
+ * address is saved, so a refresh reads the listing itself.
  */
 export async function readCareers(
   c: Company,
@@ -123,6 +123,8 @@ export async function readCareers(
     // Refused or slow plain (a WAF's 403, a timeout): the browser may still get it.
   }
   const page = await r.render(url).catch((err: Error) => err);
+  // No browser on this Mac: the page isn't to blame; it waits, as it was, until there is one.
+  if (page instanceof Error && noBrowser(page.message)) return null;
   if (page instanceof Error)
     return { kind: "none", how: `its careers page didn't load: ${page.message.slice(0, 120)}` };
   if (page.blocked) return { kind: "blocked", how: `robots.txt disallows ${page.blocked}` };
@@ -238,8 +240,9 @@ function write(c: Company, o: Outcome, now: Date): Found {
 
 /**
  * Read these companies' careers pages, one at a time in one browser. Stops while the model can't
- * run, and at discovery's deadline: none is started past it, and one going then is written when it
- * finishes whole (what the model read is kept), else stays "unreadable" for the next tick.
+ * run or there is no browser, and at discovery's deadline: none is started past it, and one going
+ * then is written when it finishes whole (what the model read is kept), else stays "unreadable" for
+ * the next tick.
  */
 export async function readPages(companies: Company[], now = new Date()): Promise<Found[]> {
   const out: Found[] = [];

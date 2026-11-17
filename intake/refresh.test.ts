@@ -161,6 +161,20 @@ test("a failed, cut-off or unparsed read closes nothing; three failures in a row
   expect(getCompany(board.company_id)?.discovery).toBe("found");
 });
 
+test("a site in trouble (5xx, 429) backs off but isn't broken until it has failed for three days", () => {
+  read(1, [job("a")]);
+  for (const h of [2, 3, 4, 5]) read(h, { ok: false, error: "HTTP 521 <none>" });
+  read(6, { ok: false, error: "timed out after 120s" }); // as it ends
+  expect(boardRow(board.id)).toMatchObject({ status: "ok", fails: 5, last_error: "timed out after 120s" });
+  read(7, { ok: false, error: "HTTP 429 TOO MANY REQUESTS" });
+  expect(Date.parse(boardRow(board.id).next_read_at!) - T(7).getTime()).toBe(6 * 3_600_000);
+  expect(getCompany(board.company_id)?.discovery).not.toBe("queued");
+  expect(roles(board.id)[0]?.closed_at).toBeNull();
+  read(1 + 72, { ok: false, error: "HTTP 503 for https://jobs.lever.co/acme" });
+  expect(boardRow(board.id).status).toBe("broken");
+  expect(getCompany(board.company_id)?.discovery).toBe("queued");
+});
+
 test("a read under half of a board of 20 or more is suspect, and an empty one fails: nothing closes", () => {
   const many = Array.from({ length: 30 }, (_, i) => job(`r${i}`));
   read(1, many);

@@ -444,6 +444,22 @@ test("refresh: the same text isn't read by the model again; changed text waits a
   expect(entries().at(-1)).toMatchObject({ station: "read-page", board: b.id });
 });
 
+test("no browser on this Mac: a rendered page's read isn't a failure, and discovery leaves its page waiting", async () => {
+  rendered = () => {
+    throw new Error("browserType.launch: Executable doesn't exist at /x/chrome-headless-shell\n╔══════╗");
+  };
+  const b = modelPage({ text: "an older page", ago: 30, render: 1 });
+  expect(await readBoards([b], now)).toEqual([]);
+  expect(open().query("SELECT status, fails, next_read_at FROM boards").get()).toEqual({
+    status: "ok",
+    fails: 0,
+    next_read_at: b.next_read_at,
+  });
+  const id = unreadable("Beta", "https://beta.dev/careers");
+  expect(await readPages(pagesDue(), now)).toEqual([]);
+  expect(getCompany(id)?.discovery).toBe("unreadable");
+});
+
 test("a careers page whose robots.txt names its roles' sitemap is read from it: new pages once, the model's rows filled, a role it drops closes", async () => {
   expect(
     pickSitemap("https://www.tallowlycareers.com/jobsearch/", [

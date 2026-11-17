@@ -52,7 +52,7 @@ import {
 } from "./companies.ts";
 import { boardIsOthers, domainFromPosts, namesOther, type Proof, prove, slugNames } from "./domain.ts";
 import { pagesDue, readPages } from "./pages.ts";
-import { ACTIVE_DAYS, applyRead, type Board } from "./refresh.ts";
+import { ACTIVE_DAYS, applyRead, type Board, GONE, OWN_PAGE_DAYS } from "./refresh.ts";
 import {
   isCareersRoot,
   listsTitle,
@@ -112,7 +112,10 @@ const onSite = (url: string, domain: string) => {
 const oneSite = (a: Company | null, b: Company | null) =>
   !!a && !!b && proven(a) && proven(b) && registrable(a.domain!) === registrable(b.domain!);
 
-/** What addBoard did: the board and the company kept, or a refusal (the board is another company's). */
+/**
+ * What addBoard did: the board and the company kept, or a refusal (the board is another company's,
+ * or gone).
+ */
 export type Added =
   | { board: Board; companyId: number; refused: null }
   | { board: null; companyId: number; refused: string };
@@ -145,6 +148,16 @@ export function addBoard(
         ).run(now.toISOString(), refused, companyId);
         return { board: null, companyId, refused };
       }
+    }
+    // A Lever board whose page answers 404 (refresh.ts ownPages) is gone, though its roles may still
+    // be listed: not found again while that check is under a week old. Past that it is taken back,
+    // and its first read checks its page again.
+    if (had?.own_page === GONE && now.getTime() - Date.parse(had.own_page_at ?? "") < OWN_PAGE_DAYS * DAY) {
+      const refused = `${foundBy}: ${root} is gone (its Lever page answers 404)`;
+      d.query(
+        "UPDATE companies SET discovery = 'none', discovery_at = ?, discovery_note = ? WHERE id = ? AND discovery IS NOT 'found'",
+      ).run(now.toISOString(), refused, companyId);
+      return { board: null, companyId, refused };
     }
     if (had) {
       if (had.company_id !== companyId)

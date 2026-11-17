@@ -264,6 +264,21 @@ test("one company by board: two names whose boards are one board merge, and the 
   ]);
 });
 
+test("a Lever board the company has left isn't found again while that's known; a week on it is taken back", () => {
+  const id = upsertCompany({ name: "Xylo", domain: "xylo.dev" });
+  const b = addBoard(id, "lever", "https://jobs.lever.co/xylo", "test", now).board!;
+  open()
+    .query("UPDATE boards SET status = 'broken', fails = 3, own_page = 'gone', own_page_at = ? WHERE id = ?")
+    .run(now.toISOString(), b.id);
+  open().query("UPDATE companies SET discovery = 'queued' WHERE id = ?").run(id);
+  const again = addBoard(id, "lever", "https://jobs.lever.co/xylo", "boards table", now);
+  expect(again.refused).toContain("is gone");
+  expect(open().query("SELECT status FROM boards").get()).toEqual({ status: "broken" });
+  expect(getCompany(id)?.discovery).toBe("none");
+  const later = new Date(now.getTime() + 8 * 86_400_000);
+  expect(addBoard(id, "lever", "https://jobs.lever.co/xylo", "boards table", later).board?.status).toBe("ok");
+});
+
 test("discovery tries the boards table first, with one confirming read, which is the board's first read", async () => {
   setTable([
     { name: "", website: "", provider: "greenhouse", url: "https://job-boards.greenhouse.io/fernwork" },

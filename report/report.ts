@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { loadFilters } from "../ats/filters.ts";
+import { INSTALL_BROWSER } from "../ats/render.ts";
 import { open } from "../core/db.ts";
 import { ROOT } from "../core/features.ts";
 import { inOfflineSpan, offlineSpans } from "../core/online.ts";
@@ -12,7 +13,7 @@ import { readState } from "../core/state.ts";
 import { EVENTS, type Failure, failures, redact } from "../core/trace.ts";
 import { watchedCompanies } from "../intake/companies.ts";
 import { status } from "../setup/state.ts";
-import { measuresSection } from "./measures.ts";
+import { firstLine, measuresSection } from "./measures.ts";
 
 export type Problem = { area: string; what: string; count: number; last: Failure };
 
@@ -72,10 +73,27 @@ function version(): string {
 async function chromium(): Promise<string> {
   try {
     const { chromium } = await import("playwright");
-    return existsSync(chromium.executablePath()) ? "installed" : "missing (bunx playwright install chromium)";
+    return existsSync(chromium.executablePath()) ? "installed" : `missing (${INSTALL_BROWSER})`;
   } catch (err) {
     return `unavailable: ${(err as Error).message.slice(0, 80)}`;
   }
+}
+
+/**
+ * What this Mac lacks, as a problem beside the failures: Playwright's browser. Careers pages that
+ * need it wait without counting as failed (intake/refresh.ts), so nothing else would say so.
+ */
+export async function setupProblems(now = new Date()): Promise<Problem[]> {
+  if (!(await chromium()).startsWith("missing")) return [];
+  const error = `Not installed: careers pages that need it wait. Run ${INSTALL_BROWSER}`;
+  return [
+    {
+      area: "setup",
+      what: "Chromium",
+      count: 1,
+      last: { ts: now.toISOString(), area: "setup", what: "Chromium", error },
+    },
+  ];
 }
 
 export async function bugReport(hours = 24, now = new Date()): Promise<string> {
@@ -101,8 +119,9 @@ export async function bugReport(hours = 24, now = new Date()): Promise<string> {
     : {};
   // jobs.json keeps a job taken out since, its last run and error with it: only jobs that still run
   // are listed.
-  const { discoverJobs } = await import("../intake/run.ts");
+  const { discoverJobs, discoverSources } = await import("../intake/run.ts");
   const names = new Set((await discoverJobs()).map((j) => j.name));
+  const sources = new Set((await discoverSources()).map((x) => x.key));
   const jobs = Object.entries(ran).filter(([k]) => names.has(k));
   const out = [
     "# Job Signal bug report",
@@ -116,7 +135,7 @@ export async function bugReport(hours = 24, now = new Date()): Promise<string> {
       ? ps.flatMap((p) => [
           `### ${p.area} · ${p.what}${p.count > 1 ? ` · ${p.count}×` : ""}`,
           "",
-          `Last at ${p.last.ts}: ${p.last.error}`,
+          `Last at ${p.last.ts}: ${firstLine(p.last.error)}`,
           ...(p.last.context ? ["", "```json", JSON.stringify(p.last.context, null, 1), "```"] : []),
           ...(p.last.stack ? ["", "```", p.last.stack, "```"] : []),
           "",
@@ -143,10 +162,13 @@ export async function bugReport(hours = 24, now = new Date()): Promise<string> {
     "",
     "## Sources",
     "",
-    ...Object.entries(readState().sources).map(
-      ([k, v]) =>
-        `- ${k}: ${v.connected ? "connected" : "not connected"}${v.enabled === false ? " (off)" : ""} · last ran ${v.lastRun ?? "never"} · last ok ${v.lastOk ?? "never"}${v.stat ? ` · ${v.stat}` : ""}${v.failures ? ` · ${v.failures} failures: ${v.reason}` : ""}`,
-    ),
+    // state.json keeps a source taken out of the code since: only sources that still exist are listed.
+    ...Object.entries(readState().sources)
+      .filter(([k]) => sources.has(k))
+      .map(
+        ([k, v]) =>
+          `- ${k}: ${v.connected ? "connected" : "not connected"}${v.enabled === false ? " (off)" : ""} · last ran ${v.lastRun ?? "never"} · last ok ${v.lastOk ?? "never"}${v.stat ? ` · ${v.stat}` : ""}${v.failures ? ` · ${v.failures} failures: ${v.reason}` : ""}`,
+      ),
     "",
     "## Jobs",
     "",

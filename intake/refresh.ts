@@ -20,7 +20,7 @@ import {
   runBoards,
   sameTitle,
 } from "../ats/reader.ts";
-import { type Renderer, renderer } from "../ats/render.ts";
+import { noBrowser, type Renderer, renderer } from "../ats/render.ts";
 // @ts-expect-error plain JS module
 import { QUERIED, SEARCHABLE } from "../ats/search.mjs";
 import { pickSitemap, rolePage, sitemapLocs } from "../ats/sitemap.ts";
@@ -71,6 +71,10 @@ export const OLD_EVERY_HOURS = 24; // a board of a company not active (no signal
 export const ACTIVE_DAYS = 60; // a company a signal named this recently has active boards
 export const FAILS_BEFORE_BROKEN = 3;
 const PAGE_GIVE_UP_DAYS = 30; // a careers page failing this long sends its company back to discovery
+// A board whose site answers 5xx or 429 this long, since its last good read, is broken: long past a
+// real outage (Workday's 521s of 2026-11-13 lasted about ten hours) or a weekend's maintenance.
+const OUTAGE_GIVE_UP_DAYS = 3;
+const MAX_BACKOFF_HOURS = EVERY_HOURS; // a failing board waits an hour, then two, … up to this
 export const MISSES_TO_CLOSE = 2;
 export const SEARCHED_STALE_DAYS = 30; // a searched board's role unseen this long is closed
 const SUSPECT_FROM = 20; // a read under half of a board this big is suspect
@@ -298,14 +302,31 @@ type RoleRow = {
   first_seen: string;
 };
 
+/**
+ * Trouble on the site's side, not a sign the board has gone: an HTTP 5xx (Cloudflare's 52x
+ * included) or 429, as the providers say it ("HTTP 521 <none>", "HTTP 429 TOO MANY REQUESTS") and
+ * as a page read says it ("HTTP 503 for https://…"); and Workday's job API redirecting, as it does
+ * to its maintenance page.
+ */
+const serverTrouble = (provider: string, error: string): boolean =>
+  /\bHTTP (429|5\d\d)\b/.test(error) || (provider === "workday" && /^UnexpectedRedirect\b/.test(error));
+
 function failRead(b: Board, error: string, now: Date): void {
   const fails = b.fails + 1;
   // A company's own careers page that keeps failing (or shows no roles) is read weekly after three
   // failed reads, and looked for again only after a month with nothing.
   const page = b.provider === "careers-page";
+  // A board whose site is in trouble (this read, or the one before: a timeout as it ends) is tried
+  // again on the usual back-off, and taken as broken only once it has failed for
+  // OUTAGE_GIVE_UP_DAYS since its last good read.
+  const outage =
+    !page &&
+    (serverTrouble(b.provider, error) || (b.fails > 0 && serverTrouble(b.provider, b.last_error ?? "")));
   const since = Date.parse(b.last_read_at ?? b.created_at);
-  const broken = fails >= FAILS_BEFORE_BROKEN && (!page || now.getTime() - since >= PAGE_GIVE_UP_DAYS * DAY);
-  const wait = page && fails >= FAILS_BEFORE_BROKEN ? 7 * 24 * HOUR : fails * HOUR;
+  const days = page ? PAGE_GIVE_UP_DAYS : outage ? OUTAGE_GIVE_UP_DAYS : 0;
+  const broken = fails >= FAILS_BEFORE_BROKEN && (!days || now.getTime() - since >= days * DAY);
+  const wait =
+    page && fails >= FAILS_BEFORE_BROKEN ? 7 * 24 * HOUR : Math.min(fails, MAX_BACKOFF_HOURS) * HOUR;
   tx(() => {
     open()
       .query(
@@ -317,7 +338,8 @@ function failRead(b: Board, error: string, now: Date): void {
         fails,
         error: error.slice(0, 300),
         status: broken ? "broken" : "ok",
-        // Back off: an hour, then two, then broken (a careers page: weekly).
+        // Back off: an hour, then two, then broken (a careers page: weekly; a site in trouble: up
+        // to six hours, until OUTAGE_GIVE_UP_DAYS).
         next: new Date(now.getTime() + wait).toISOString(),
       });
     // Three failed reads in a row: the company's board is looked for again, unless it has
@@ -333,11 +355,16 @@ function failRead(b: Board, error: string, now: Date): void {
   failure("refresh", b.url, error, { board: b.id, fails });
 }
 
-/** A board that failed (failRead) for the third time with nothing to read: its roles close. */
+/**
+ * A board that failed (failRead) for the third time with nothing to read: its roles close. Only
+ * once failRead has marked it broken: a site in trouble keeps its roles meanwhile.
+ */
 function closeOnThird(b: Board, now: Date): number {
   if (b.fails + 1 < FAILS_BEFORE_BROKEN) return 0;
   return tx(() => {
     const d = open();
+    const { status } = d.query("SELECT status FROM boards WHERE id = ?").get(b.id) as { status: string };
+    if (status !== "broken") return 0;
     const closed = d
       .query("UPDATE roles SET closed_at = ? WHERE board_id = ? AND closed_at IS NULL")
       .run(now.toISOString(), b.id).changes;
@@ -858,7 +885,7 @@ async function readCareersPage(
 
 export const OWN_PAGE_DAYS = 7;
 // A Lever board whose page answers 404: the company has left it, though Lever's API lists its roles.
-const GONE = "gone";
+export const GONE = "gone";
 
 /**
  * Has the company turned Ashby's hosted pages off? Checked weekly from the board's embed view
@@ -971,9 +998,11 @@ export async function readBoards(
           try {
             done(await readCareersPage(b, render, now, filters, sitemapUntil));
           } catch (err) {
-            // No internet: not counted, the board stays due (let go below, with no outcome).
-            if (await countsAsFailure((err as Error).message))
-              done(applyRead(b, { ok: false, error: (err as Error).message }, now, { filters }));
+            // No internet, or no browser on this Mac to render it: not counted, the board stays due
+            // (let go below, with no outcome). The Problems list says the browser is missing.
+            const message = (err as Error).message;
+            if (!noBrowser(message) && (await countsAsFailure(message)))
+              done(applyRead(b, { ok: false, error: message }, now, { filters }));
           }
         }
       } finally {

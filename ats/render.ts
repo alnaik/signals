@@ -191,6 +191,12 @@ export async function openRenderer(userAgent: string, ms = RENDER_MS): Promise<R
   };
 }
 
+// Playwright's browser isn't on this Mac (Playwright says "Executable doesn't exist at …"): no page
+// can render until it's installed again. This Mac's problem, not the page's.
+export const INSTALL_BROWSER = "bunx playwright install chromium";
+export const noBrowser = (message: string | null | undefined): boolean =>
+  /Executable doesn't exist/.test(message ?? "");
+
 // The browser, swappable in tests.
 let make: typeof openRenderer = openRenderer;
 export function setRenderer(fn: typeof openRenderer): void {

@@ -10,6 +10,8 @@ import { type Entry, read } from "../core/log.ts";
 import { paths } from "../core/paths.ts";
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
+/** An error's first line: a multi-line one (Playwright's banner) would flood the report. */
+export const firstLine = (error: string) => error.split("\n")[0]!.trim();
 const pct = (a: number, b: number) => (b ? `${Math.round((100 * a) / b)}%` : "—");
 
 function threads(): string[] {
@@ -39,7 +41,7 @@ export function boardCounts(): { checked: number; partial: number; off: string[]
       .filter((r) => r.status === "broken" || r.fails)
       .map(
         (r) =>
-          `${r.name} (${r.provider}): ${r.status === "broken" ? "broken" : `${r.fails} failed`} · ${r.last_error ?? "?"}`,
+          `${r.name} (${r.provider}): ${r.status === "broken" ? "broken" : `${r.fails} failed`} · ${firstLine(r.last_error ?? "?")}`,
       ),
   };
 }
