@@ -31,23 +31,28 @@ const pool = `FROM roles r JOIN companies c ON c.id = r.company_id
     AND r.review NOT IN (SELECT value FROM json_each($skip))`;
 const skipped = () => ({ skip: JSON.stringify(loadFilters().title_skip ?? []) });
 
-/** The Inbox's line: how many roles might be yours, in how many groups, how many groups are new. */
+/** A group close to a phrase of yours ("Data Engineer + science", "AI Engineer (any order)") or another job that builds: tiers 1 and 2. */
+const likely = (key: string) => key.includes(" + ") || key.endsWith("(any order)") || BUILD.test(key);
+
+/**
+ * The Inbox's line: how many roles might be yours, in how many groups, how many groups are new.
+ * Tiers 1 and 2 only: the third (managers, analysts, consultants …) is most of the roles (19,211 of
+ * 28,145 on 2026-11-17) and is the least likely yours; Review titles still lists it, folded.
+ */
 export function reviewCount(): { roles: number; groups: number; fresh: number } {
   ensureScored();
-  const r = open()
-    .query(`SELECT count(*) AS roles, count(DISTINCT review) AS groups FROM (SELECT r.review ${pool})`)
-    .get(skipped()) as { roles: number; groups: number };
+  const rows = open()
+    .query(`SELECT r.review AS key, count(*) AS n, min(r.first_seen) AS first ${pool} GROUP BY r.review`)
+    .all(skipped()) as { key: string; n: number; first: string }[];
   const seen = getMeta("review_seen_at");
-  const fresh = seen
-    ? (
-        open()
-          .query(
-            `SELECT count(*) AS n FROM (SELECT r.review ${pool} GROUP BY r.review HAVING min(r.first_seen) > $seen)`,
-          )
-          .get({ ...skipped(), seen }) as { n: number }
-      ).n
-    : 0;
-  return { ...r, fresh };
+  const out = { roles: 0, groups: 0, fresh: 0 };
+  for (const g of rows) {
+    if (!likely(g.key)) continue;
+    out.roles += g.n;
+    out.groups++;
+    if (seen && g.first > seen) out.fresh++;
+  }
+  return out;
 }
 
 /**
