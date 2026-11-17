@@ -66,6 +66,7 @@ export function App() {
         open(null);
         setPage(key ? { key, params } : null);
       },
+      params: (params) => setPage((p) => (p ? { ...p, params } : p)),
       refetch: async (id) => (id ? store.refetchThread(id) : store.refetchAll(true)),
       post: (url, body) =>
         fetch(url, {

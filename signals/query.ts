@@ -12,7 +12,7 @@
 import { loadFilters, missed } from "../ats/filters.ts";
 import { DAY, getMeta, open } from "../core/db.ts";
 import * as index from "../core/index-db.ts";
-import { prefixMatch, searchHits, words } from "../inbox/search.ts";
+import { namesFound, prefixMatch, words } from "../inbox/search.ts";
 import { applyEmailOf, companyOfThread, fundingOf, isStandIn } from "../intake/companies.ts";
 import { ensureScored } from "../intake/refresh.ts";
 import { isReading, plainNote } from "../sources/pipeline.ts";
@@ -248,7 +248,7 @@ function decode(s: string | null | undefined): Cursor | null {
 function hits(q: string): number[] {
   const tokens = words(q);
   if (!tokens.length) return [];
-  const byName = searchHits(q).names;
+  const byName = namesFound(q);
   const rows = open()
     .query("SELECT company_id, title, text FROM signals WHERE company_id IS NOT NULL")
     .all() as { company_id: number; title: string | null; text: string | null }[];

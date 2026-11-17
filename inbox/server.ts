@@ -21,8 +21,10 @@ import {
   knownMetro,
   otherCompany,
   othersPage,
+  searchPage,
 } from "./query.ts";
-import { searchHits } from "./search.ts";
+import { reading, readOffer, startRead, stopRead } from "./read.ts";
+import { search } from "./search.ts";
 import { reviewCount, reviewTitles, skipTitle, withTitle } from "./titles.ts";
 
 const json = (b: unknown, status = 200) => Response.json(b, { status });
@@ -37,8 +39,9 @@ const flags = (req: Request, lists = true) => {
     cursor: u.searchParams.get("cursor"),
     source: u.searchParams.get("source") || null,
     remote,
-    // The search box's words, found once per request (every query of the request uses them).
-    hits: q ? searchHits(q, { remote }) : null,
+    q,
+    // The search box's words, found (kept until intake changes something): a company's roles are those found.
+    found: q ? search(q) : null,
     metro,
     // The city's companies, likewise: each open role's location read once a request, not once a
     // query; not for a company's roles (`lists` false), which the city doesn't narrow.
@@ -124,6 +127,53 @@ export const feature: ServerFeature = {
       GET: (req) => {
         const f = flags(req);
         return json(othersPage(f));
+      },
+    },
+    // The search box: every open role its words find, by company, and what goes with the list.
+    "/api/inbox/search": {
+      GET: (req) => {
+        const f = flags(req);
+        return json(searchPage(f.q, { cursor: f.cursor }));
+      },
+    },
+    "/api/inbox/search/companies/:cid": {
+      GET: (req) =>
+        json({ company: searchPage(flags(req).q, { only: num(req.params.cid) }).companies[0] ?? null }),
+    },
+    "/api/inbox/search/about": {
+      GET: (req) => {
+        const { q } = flags(req);
+        const f = search(q);
+        const texts = open()
+          .query(
+            `SELECT count(*) AS open, count(t.role_id) AS kept, sum(r.fits) AS fit, count(CASE WHEN r.fits = 1 THEN t.role_id END) AS fitKept
+             FROM roles r LEFT JOIN role_text t ON t.role_id = r.id WHERE r.closed_at IS NULL`,
+          )
+          .get() as { open: number; kept: number; fit: number; fitKept: number };
+        const names = f.named.map((id) => getCompany(id)?.name ?? "").filter(Boolean);
+        const offer = readOffer(f.named);
+        return json({
+          terms: f.terms,
+          total: f.total,
+          fitting: f.fitting,
+          companies: f.companies.length,
+          missing: f.missing,
+          texts,
+          offer: offer ? { names, ...offer } : null,
+          reading: reading(),
+        });
+      },
+    },
+    // Read them: the named companies' descriptions and places, in the server; Stop.
+    "/api/inbox/read": {
+      POST: async (req) => {
+        const b = (await req.json().catch(() => ({}))) as { q?: string; stop?: boolean };
+        if (b.stop)
+          return json({ toast: stopRead() ? "Stopping after the reads under way" : "Nothing is being read" });
+        const f = search(String(b.q ?? "").slice(0, 80));
+        const names = f.named.map((id) => getCompany(id)?.name ?? "").filter(Boolean);
+        const r = startRead(f.named, names);
+        return json(r ? { reading: r } : { toast: "Nothing to read: every description here is kept" });
       },
     },
     "/api/others/companies/:cid": {

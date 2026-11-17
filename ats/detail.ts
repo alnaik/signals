@@ -2,11 +2,11 @@
 // the job list only; the text of a role that fits comes from the list when the list has it
 // (Lever, Ashby), otherwise from here: the provider's own detail endpoint, else the posting's page.
 
-import { open } from "../core/db.ts";
+import { markChanged, open } from "../core/db.ts";
 import { htmlToText } from "../core/http.ts";
 // @ts-expect-error plain JS module
 import { locationsFromDetail } from "../vendor/career-ops/providers/workday.mjs";
-import { workMode } from "./filters.ts";
+import { loadFilters, score, workMode } from "./filters.ts";
 import { boardSlug, getPage } from "./reader.ts";
 
 type RoleRow = {
@@ -108,8 +108,35 @@ async function fromProvider(role: RoleRow, board: BoardRow): Promise<string | nu
   }
 }
 
-/** The posting's own page: its JobPosting description, else the page's text. */
-async function fromPage(url: string): Promise<string | null> {
+/**
+ * The places a posting's page names: its JobPosting's jobLocation when it has values, else
+ * Avature's list under the title, one place or "Same job available in N locations" (Deloitte's
+ * board list carries no place: 8,121 open roles had none, 2026-11-16).
+ * Several are joined with " · ", as a board's own list joins them.
+ */
+export function pagePlaces(html: string, posting?: Record<string, unknown>): string {
+  const flat = (v: unknown): unknown[] => (Array.isArray(v) ? v.flatMap(flat) : v ? [v] : []);
+  const places = flat(posting?.jobLocation).flatMap((l) => {
+    const a = (l as { address?: unknown })?.address;
+    if (typeof a === "string") return a.trim() ? [a.trim()] : [];
+    const o = (a ?? {}) as Record<string, unknown>;
+    const parts = [o.addressLocality, o.addressRegion, o.addressCountry]
+      .map((x) => (typeof x === "string" ? x : ((x as { name?: unknown })?.name ?? "")))
+      .filter((x): x is string => typeof x === "string" && !!x.trim());
+    return parts.length ? [parts.join(", ")] : [];
+  });
+  if (places.length) return [...new Set(places)].join(" · ");
+  // Avature's header: its places, one or many ("Same job available in 20 locations" above them).
+  const block = html.match(/<div[^>]*article__header--locations[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i);
+  if (!block) return "";
+  return [...block[1]!.matchAll(/<p[^>]*>([^<]+)<\/p>/g)]
+    .map((m) => decode(m[1]!).trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** The posting's own page: its JobPosting description, else the page's text; and the places it names. */
+async function fromPage(url: string): Promise<{ text: string | null; places: string }> {
   const html = (await getPage(url)).text;
   for (const m of html.matchAll(/<script[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
@@ -120,14 +147,55 @@ async function fromPage(url: string): Promise<string | null> {
             ? [v as Record<string, unknown>, ...flat((v as Record<string, unknown>)["@graph"])]
             : [];
       const posting = flat(JSON.parse(m[1]!)).find((o) => [o["@type"]].flat().includes("JobPosting"));
-      if (typeof posting?.description === "string") return htmlToText(decode(posting.description));
+      if (typeof posting?.description === "string")
+        return { text: htmlToText(decode(posting.description)), places: pagePlaces(html, posting) };
     } catch {}
   }
   const text = htmlToText(html);
-  return text.length >= 200 ? text.slice(0, 20_000) : null;
+  return { text: text.length >= 200 ? text.slice(0, 20_000) : null, places: pagePlaces(html) };
 }
 
-/** A role's text: from role_text, or fetched now and kept. null when nothing readable came back. */
+/** A role with no place takes the places its page named: scored again (it may fit now, and is new from then). */
+async function placeRole(role: RoleRow, places: string, text: string, now: Date): Promise<void> {
+  const { SET_SCORE } = await import("../intake/refresh.ts");
+  const job = { title: role.title, location: places, description: text };
+  const s = score(job, loadFilters());
+  open()
+    .query(`UPDATE roles SET location = $location, mode = $mode, ${SET_SCORE} WHERE id = $id`)
+    .run({
+      id: role.id,
+      location: places,
+      mode: workMode(job).mode,
+      fits: s.fits ? 1 : 0,
+      matched: s.matched,
+      review: s.review,
+      now: now.toISOString(),
+    });
+  markChanged(now);
+}
+
+/**
+ * The places of a role whose text is kept but whose board named no place (Deloitte's): read from
+ * its page. Whether it has a place now.
+ */
+export async function rolePlaces(roleId: number, now = new Date()): Promise<boolean> {
+  const d = open();
+  const role = d
+    .query("SELECT id, url, ext_id, title, location, mode FROM roles WHERE id = ?")
+    .get(roleId) as RoleRow | null;
+  if (!role) return false;
+  if (role.location.trim()) return true;
+  const page = await fromPage(role.url).catch(() => null);
+  if (!page?.places) return false;
+  const kept = d.query("SELECT text FROM role_text WHERE role_id = ?").get(roleId) as { text: string } | null;
+  await placeRole(role, page.places, kept?.text ?? page.text ?? "", now);
+  return true;
+}
+
+/**
+ * A role's text: from role_text, or fetched now and kept. null when nothing readable came back.
+ * A role with no place takes the places its page names, and is scored again (it may fit now).
+ */
 export async function roleText(roleId: number, now = new Date()): Promise<string | null> {
   const d = open();
   const kept = d.query("SELECT text FROM role_text WHERE role_id = ?").get(roleId) as { text: string } | null;
@@ -140,15 +208,24 @@ export async function roleText(roleId: number, now = new Date()): Promise<string
     .query("SELECT provider, url FROM boards WHERE id = ?")
     .get(role.board_id) as BoardRow | null;
   let text: string | null = null;
+  let places = "";
   try {
     text = board ? await fromProvider(role, board) : null;
   } catch {}
-  if (!text) text = await fromPage(role.url).catch(() => null);
+  if (!text) {
+    const page = await fromPage(role.url).catch(() => null);
+    text = page?.text ?? null;
+    places = page?.places ?? "";
+  }
   if (!text?.trim()) return null;
   const clean = text.trim().slice(0, 20_000);
   d.query(
     "INSERT INTO role_text (role_id, text, fetched_at) VALUES (?, ?, ?) ON CONFLICT(role_id) DO UPDATE SET text = excluded.text",
   ).run(roleId, clean, now.toISOString());
+  if (!role.location.trim() && places) {
+    await placeRole(role, places, clean, now);
+    return clean;
+  }
   // The text can say what the title and place didn't: remote, hybrid, on-site.
   if (role.mode === "unknown") {
     const mode = workMode({ title: role.title, location: role.location, description: clean }).mode;

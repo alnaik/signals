@@ -3,9 +3,10 @@ import { startApply } from "../apply/board.tsx";
 import { age, ago, roleHref, safeHref, shortDate } from "../board/format.ts";
 import { SectionHead } from "../board/Queue.tsx";
 import type { BoardFeature, Ctx } from "../board/slots.ts";
-import { Copy, EmptyHint, ModeBadge, RoleText } from "../board/ui.tsx";
+import { Copy, EmptyHint, ModeBadge, RoleText, Tag } from "../board/ui.tsx";
 import { work, workCompany } from "../decisions/board.tsx";
 import { useAdding } from "../watchlist/board.tsx";
+import { FoundLines } from "./found.tsx";
 import type { InboxCompany, RoleView } from "./query.ts";
 import { ReviewLine, ReviewTitles } from "./titles.tsx";
 
@@ -96,6 +97,8 @@ export function RoleRow({
             {r.place || (r.mode && r.mode !== "unknown" ? "" : r.location || "location unknown")}
           </span>
           <ModeBadge mode={r.mode} />
+          {/* A search finds roles in any state: one you decided on says so. */}
+          {(r.state === "applied" || r.state === "dismissed") && <Tag>{r.state}</Tag>}
           {!r.fits && (
             <span className={r.near ? "held-text" : "faint"}>{r.why ?? "doesn't pass your filters"}</span>
           )}
@@ -159,12 +162,12 @@ function Roles({
   // pages "more roles" opened; new filters start from the top.
   const shown = useRef({ load, n: 0 });
   shown.current.n = roles.length;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: c.roles is the trigger
+  // biome-ignore lint/correctness/useExhaustiveDependencies: c.roles and c.hitRoles are the trigger
   useEffect(() => {
     const same = shown.current.load === load;
     shown.current.load = load;
     load(null, same ? shown.current.n : 0);
-  }, [load, c.roles]);
+  }, [load, c.roles, c.hitRoles]);
   return (
     <div style={{ paddingLeft: 16, paddingBottom: 8 }}>
       {roles.map((r) => (
@@ -260,7 +263,14 @@ function CompanyRow({
           {c.watched && (
             <span className="held-text">{c.week > 0 ? `Watched · ${c.week} new this week` : "Watched"}</span>
           )}
-          {c.held !== undefined ? (
+          {c.dismissed && <span className="faint">Dismissed</span>}
+          {c.hitRoles !== undefined ? (
+            c.hitRoles > 0 && (
+              <span className="muted">
+                {c.hitRoles} role{c.hitRoles === 1 ? "" : "s"} found · {c.hitFits ?? 0} fit
+              </span>
+            )
+          ) : c.held !== undefined ? (
             <span className="muted">
               {c.held
                 ? `${c.roles} of ${c.held} open role${c.held === 1 ? "" : "s"} fit${c.roles === 1 ? "s" : ""}`
@@ -451,12 +461,12 @@ const savedCity = (): string | null => {
   }
 };
 
-function InboxPage({ ctx }: { ctx: Ctx }) {
+function InboxPage({ ctx, params }: { ctx: Ctx; params: Record<string, string> }) {
   const [filters, setFilters] = useState<Filters>(() => ({
     source: null,
     remote: false,
     metro: savedCity(),
-    q: "", // as the search box's first pause sets it, so that doesn't load both lists again
+    q: params.q ?? "", // the address's words; then as the search box's pauses set them
   }));
   useEffect(() => {
     try {
@@ -464,9 +474,9 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
       else localStorage.removeItem(CITY_KEY);
     } catch {}
   }, [filters.metro]);
-  // The search box: what's typed now, and the words searched once typing pauses (each search
-  // reloads both lists).
-  const [typed, setTyped] = useState("");
+  // The search box: what's typed now, and the words searched once typing pauses. They live in
+  // the address (#/inbox?q=…), so coming back, or a link, searches them again.
+  const [typed, setTyped] = useState(params.q ?? "");
   useEffect(() => {
     const t = setTimeout(
       () => setFilters((f) => (f.q === typed.trim() ? f : { ...f, q: typed.trim() })),
@@ -474,13 +484,37 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
     );
     return () => clearTimeout(t);
   }, [typed]);
-  const inboxList = useCompanies("/api/inbox", filters);
-  // The city, Remote only and the search narrow "Everything else" too; the source switch is the Inbox's own.
+  const wrote = useRef(params.q ?? "");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the words searched are the trigger
+  useEffect(() => {
+    if ((filters.q ?? "") === wrote.current) return;
+    wrote.current = filters.q ?? "";
+    ctx.params(filters.q ? { q: filters.q } : {});
+  }, [filters.q]);
+  // An address typed or followed (Back): its words.
+  useEffect(() => {
+    if ((params.q ?? "") !== wrote.current) {
+      wrote.current = params.q ?? "";
+      setTyped(params.q ?? "");
+    }
+  }, [params.q]);
+  const listFilters = useMemo(
+    () => ({ source: filters.source, remote: filters.remote, metro: filters.metro }),
+    [filters.source, filters.remote, filters.metro],
+  );
+  const inboxList = useCompanies("/api/inbox", listFilters);
+  // The city and Remote only narrow "Everything else" too; the source switch is the Inbox's own.
   const otherFilters = useMemo(
-    () => ({ source: null, remote: filters.remote, metro: filters.metro, q: filters.q }),
-    [filters.remote, filters.metro, filters.q],
+    () => ({ source: null, remote: filters.remote, metro: filters.metro }),
+    [filters.remote, filters.metro],
   );
   const others = useCompanies("/api/others", otherFilters);
+  // The search: every open role, any company, none of the switches.
+  const searchFilters = useMemo(
+    () => ({ source: null, remote: false, metro: null, q: filters.q }),
+    [filters.q],
+  );
+  const found = useCompanies("/api/inbox/search", searchFilters);
   const { companies, count, sources, metros } = inboxList;
   // A saved city the profile no longer has, or no cities at all (the switch hidden): back to every
   // city, once the list has come back with the cities there are.
@@ -553,12 +587,19 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
 
   if (!companies) return null;
   const tags = new Map(sources.map((s) => [s.source, s.tag]));
+  const searching = !!filters.q;
+  // While searching, every open role is looked at: the switches wait.
+  const idle = searching
+    ? "Search looks at every open role: the switches wait until you clear it"
+    : undefined;
   return (
     <main className="queue">
       <section>
         <SectionHead
-          count={count}
-          label={filters.source ? (tags.get(filters.source) ?? filters.source) : "Inbox"}
+          count={searching ? found.count : count}
+          label={
+            searching ? "Search" : filters.source ? (tags.get(filters.source) ?? filters.source) : "Inbox"
+          }
         />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", margin: "10px 0" }}>
           <input
@@ -571,9 +612,16 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
             style={{ width: 240 }}
           />
           {sources.length > 1 && (
-            <div className="segmented" role="group" aria-label="Source">
+            <div
+              className="segmented"
+              role="group"
+              aria-label="Source"
+              title={idle}
+              style={searching ? DIM : undefined}
+            >
               <button
                 type="button"
+                disabled={searching}
                 aria-pressed={!filters.source}
                 onClick={() => setFilters({ ...filters, source: null })}
               >
@@ -583,6 +631,7 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
                 <button
                   key={s.source}
                   type="button"
+                  disabled={searching}
                   aria-pressed={filters.source === s.source}
                   onClick={() => setFilters({ ...filters, source: s.source })}
                 >
@@ -594,6 +643,9 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
           {metros.length > 0 && (
             <select
               aria-label="City"
+              disabled={searching}
+              title={idle}
+              style={searching ? DIM : undefined}
               value={filters.metro ?? ""}
               onChange={(e) => setFilters({ ...filters, metro: e.target.value || null })}
             >
@@ -603,9 +655,14 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
               ))}
             </select>
           )}
-          <label className="muted" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <label
+            className="muted"
+            title={idle}
+            style={{ display: "flex", gap: 6, alignItems: "center", ...(searching ? DIM : {}) }}
+          >
             <input
               type="checkbox"
+              disabled={searching}
               checked={filters.remote}
               onChange={(e) => setFilters({ ...filters, remote: e.target.checked })}
             />
@@ -628,37 +685,53 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
             </button>
           )}
         </div>
-        {/* Only fits reach the Inbox; the titles in your places that might be yours wait here. */}
-        <ReviewLine ctx={ctx} />
-        {companies.length === 0 &&
-          (filters.q || filters.source || filters.metro || filters.remote ? (
-            <div className="empty" style={{ paddingLeft: 0 }}>
-              {filters.q ? `Nothing in the Inbox matches “${filters.q}”.` : "Nothing new for these filters."}
+        {searching ? (
+          <>
+            <div className="faint" style={{ fontSize: 13, margin: "-4px 0 6px" }}>
+              {idle}.
             </div>
-          ) : (
-            <EmptyHint ctx={ctx} where="inbox" />
-          ))}
-        {rows(inboxList, filters)}
+            <FoundLines ctx={ctx} q={filters.q!} setTyped={setTyped} />
+            {rows(found, searchFilters)}
+          </>
+        ) : (
+          <>
+            {/* Only fits reach the Inbox; the titles in your places that might be yours wait here. */}
+            <ReviewLine ctx={ctx} />
+            {companies.length === 0 &&
+              (filters.source || filters.metro || filters.remote ? (
+                <div className="empty" style={{ paddingLeft: 0 }}>
+                  Nothing new for these filters.
+                </div>
+              ) : (
+                <EmptyHint ctx={ctx} where="inbox" />
+              ))}
+            {rows(inboxList, filters)}
+          </>
+        )}
       </section>
       {/* Every other company with a board: all its open roles, to browse when nothing is new. */}
-      <section>
-        <SectionHead count={others.count} label="Everything else" />
-        {others.companies?.length === 0 && (
-          <div className="empty" style={{ paddingLeft: 0 }}>
-            {filters.q ? `Nothing else matches “${filters.q}”.` : "No other companies with a board."}
-          </div>
-        )}
-        {rows(others, otherFilters)}
-      </section>
+      {!searching && (
+        <section>
+          <SectionHead count={others.count} label="Everything else" />
+          {others.companies?.length === 0 && (
+            <div className="empty" style={{ paddingLeft: 0 }}>
+              No other companies with a board.
+            </div>
+          )}
+          {rows(others, otherFilters)}
+        </section>
+      )}
     </main>
   );
 }
+
+const DIM = { opacity: 0.45 };
 
 const inbox: BoardFeature = {
   name: "inbox",
   order: 5,
   pages: {
-    inbox: (ctx) => <InboxPage ctx={ctx} />,
+    inbox: (ctx, params) => <InboxPage ctx={ctx} params={params} />,
     titles: (ctx) => <ReviewTitles ctx={ctx} />,
   },
 };

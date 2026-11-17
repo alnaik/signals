@@ -36,6 +36,14 @@ close to a phrase of yours on top ("Data Science Engineer · 13 roles · like yo
 Add puts the phrase in your title words, and its roles come to the Inbox; Not mine stops showing a
 group. Nothing becomes a fit without your press.
 
+The Inbox's **search box** looks at every open role, fitting or not, at any company: each word
+must be in the company's name, the title, the place or the role's kept description
+(`deloitte ai and data`; `"ai & data"` for words together; `-clearance` to leave some out; a
+state's name finds its code). Roles that fit come first; one that doesn't says why. A word that
+leaves nothing says so, with how many roles match without it. When the company you named has
+roles with no description or no place yet, one press reads them from their pages, in the
+background; it goes on if you close the board.
+
 Every other company a signal named, one with nothing open that fits you, is on **Signals**, with
 the reason: hiring but nothing fits (a near miss is a role with your title words whose place or
 way of working isn't yours, and those come first), nothing posted, or a careers page the app

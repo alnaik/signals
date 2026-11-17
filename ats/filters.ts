@@ -753,7 +753,7 @@ export function stems(words: string[]): string[] {
 
 // The profile's locations are the one list of places (decided 2026-10-28): the Inbox filter, Form D's
 // states and board search's cities all come from it.
-const STATES: Record<string, string> = {
+export const STATES: Record<string, string> = {
   alabama: "AL",
   alaska: "AK",
   arizona: "AZ",
@@ -806,7 +806,7 @@ const STATES: Record<string, string> = {
   wisconsin: "WI",
   wyoming: "WY",
 };
-const CODES = new Set(Object.values(STATES));
+export const CODES = new Set(Object.values(STATES));
 
 /** Are the profile's places American: does one of them name a state? */
 export const usPlaces = (f: PostingFilters) => profileStates(f.locations ?? []).length > 0;

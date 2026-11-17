@@ -320,3 +320,32 @@ test("Google's results page says when each role was created and last published (
   ]);
   expect(googleDates("<html>no data</html>").size).toBe(0);
 });
+
+test("a posting page's places: its JobPosting's jobLocation, else Avature's list of locations", async () => {
+  const { pagePlaces } = await import("./detail.ts");
+  expect(
+    pagePlaces("", {
+      jobLocation: [
+        { address: { addressLocality: "Denver", addressRegion: "CO", addressCountry: "US" } },
+        { address: { addressLocality: "Austin", addressRegion: "TX" } },
+      ],
+    }),
+  ).toBe("Denver, CO, US · Austin, TX");
+  const avature = `<a class="link toggleLocations">Same job available in 2 locations</a>
+<div class="article__header--locations article__header--locations" >
+    <div class="fluid-cols">
+        <p class="paragraph">Denver, Colorado, United States</p>
+        <p class="paragraph">Boston, Massachusetts, United States</p>
+    </div>
+</div>`;
+  expect(pagePlaces(avature, { jobLocation: [] })).toBe(
+    "Denver, Colorado, United States · Boston, Massachusetts, United States",
+  );
+  expect(
+    pagePlaces(`<div class="article__header--locations " >
+    <div class="fluid-cols"><p class="paragraph">Austin, Texas, United States</p>
+    </div>
+</div>`),
+  ).toBe("Austin, Texas, United States");
+  expect(pagePlaces("<p>No places here</p>")).toBe("");
+});

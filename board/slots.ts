@@ -9,6 +9,7 @@ export type Ctx = {
   open: (id: string | null) => void;
   next: () => void; // advance the drawer after a decision
   page: (key: string | null, params?: Record<string, string>) => void;
+  params: (params: Record<string, string>) => void; // the open page's, in the address (#/inbox?q=…); the thread stays open
   refetch: (id?: string) => Promise<void>;
   post: (url: string, body: unknown) => Promise<Response>;
 };

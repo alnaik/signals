@@ -7,7 +7,7 @@ import { registrable } from "../ats/reader.ts";
 import { DAY, open } from "../core/db.ts";
 import { applyEmailOf, type Company, fundingOf } from "../intake/companies.ts";
 import { ensureScored } from "../intake/refresh.ts";
-import type { Hits } from "./search.ts";
+import { type Found, search } from "./search.ts";
 
 export const EXPIRE_DAYS = 21; // an untouched role, or a signal about a company with roles that fit, leaves after this
 export const PAGE = 50;
@@ -47,10 +47,12 @@ export type InboxCompany = {
   funding: { date: string; url: string } | null;
   signals: InboxSignal[]; // newest per source
   held?: number; // "Everything else" only: open roles, fitting or not (`roles` is those that fit)
-  // With a search, a company found by its roles or signals (not its name): what matched, and how
-  // many of its roles did (its row opens to those).
+  // With a search: the titles that matched, how many of its roles did and how many of those fit
+  // (its row opens to them), and whether you dismissed it.
   hits?: string[];
   hitRoles?: number;
+  hitFits?: number;
+  dismissed?: boolean;
 };
 
 type Cursor = { at: string; id: number; n?: number; m?: number };
@@ -91,7 +93,6 @@ export type InboxQuery = {
   metro?: string | null;
   city?: number[] | null; // the city's companies (inCity), found once per request; else found here
   only?: number;
-  hits?: Hits | null; // the search box's words, found (search.ts): only these companies
 };
 
 const cutoff = (now: Date) => new Date(now.getTime() - EXPIRE_DAYS * DAY).toISOString();
@@ -130,7 +131,7 @@ export function inboxPage(
   })[];
   const more = rows.length > PAGE;
   const page = rows.slice(0, PAGE);
-  const companies = withHits(describe(page, now), q.hits);
+  const companies = describe(page, now);
   const last = page.at(-1);
   return {
     companies,
@@ -188,25 +189,55 @@ const listed = (q: InboxQuery) =>
            : ""
        }
        ${q.metro ? "AND c.id IN (SELECT value FROM json_each($metro))" : ""}
-       ${q.hits ? "AND c.id IN (SELECT value FROM json_each($hits))" : ""}
    )`;
 const binds = (q: InboxQuery, now: Date) => ({
   cutoff: cutoff(now),
   ...(q.only !== undefined ? { only: q.only } : {}),
   ...(q.source ? { source: q.source } : {}),
   ...(q.metro ? { metro: JSON.stringify(q.city ?? inCity(q.metro)) } : {}),
-  ...(q.hits ? { hits: JSON.stringify(q.hits.companies) } : {}),
 });
 
-/** A company the search found by its roles or signals says what matched. */
-const withHits = (companies: InboxCompany[], hits: Hits | null | undefined): InboxCompany[] =>
-  hits
-    ? companies.map((c) =>
-        hits.names.has(c.id)
-          ? c
-          : { ...c, hits: hits.titles.get(c.id) ?? [], hitRoles: hits.roles.get(c.id)?.length ?? 0 },
-      )
-    : companies;
+/**
+ * One page of what the search box's words find (search.ts): every company with a role they find,
+ * any company, watched or dismissed, the one their words name first, then the most roles that fit.
+ * `cursor`: how many were shown.
+ */
+export function searchPage(
+  q: string,
+  o: { cursor?: string | null; only?: number } = {},
+  now = new Date(),
+): { companies: InboxCompany[]; next: string | null; count?: number } {
+  ensureScored();
+  const f = search(q, now);
+  const from = Number(decodeCursor(o.cursor)?.n ?? 0);
+  const ids =
+    o.only !== undefined ? f.companies.filter((id) => id === o.only) : f.companies.slice(from, from + PAGE);
+  if (!ids.length) return { companies: [], next: null, ...(from ? {} : { count: f.companies.length }) };
+  const rows = open()
+    .query(`SELECT * FROM companies WHERE id IN (SELECT value FROM json_each(?))`)
+    .all(JSON.stringify(ids)) as Company[];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const companies = describe(
+    ids.flatMap((id) =>
+      byId.has(id)
+        ? [{ ...byId.get(id)!, n: 0, at: byId.get(id)!.last_signal_at ?? byId.get(id)!.created_at }]
+        : [],
+    ),
+    now,
+  ).map((c) => ({
+    ...c,
+    hits: f.titles.get(c.id) ?? [],
+    hitRoles: f.roles.get(c.id)?.length ?? 0,
+    hitFits: f.fits.get(c.id) ?? 0,
+    dismissed: !!byId.get(c.id)?.dismissed_at,
+  }));
+  const more = o.only === undefined && from + PAGE < f.companies.length;
+  return {
+    companies,
+    next: more ? encodeCursor({ at: "", id: 0, n: from + PAGE }) : null,
+    ...(from || o.only !== undefined ? {} : { count: f.companies.length }),
+  };
+}
 
 /** The companies with an open role that fits in this city: each role's location read on its own. */
 export function inCity(metro: string): number[] {
@@ -254,7 +285,7 @@ export function othersPage(
   const page = rows.slice(0, PAGE);
   const last = page.at(-1);
   return {
-    companies: withHits(describe(page, now), q.hits),
+    companies: describe(page, now),
     next: rows.length > PAGE && last ? encodeCursor({ at: last.sort, id: last.id, n: last.n }) : null,
     ...(after ? {} : { count: rows[0]?.total ?? 0 }), // as inboxPage's
   };
@@ -287,7 +318,6 @@ const others = (q: InboxQuery) =>
        ${q.only !== undefined ? "AND c.id = $only" : ""}
        ${q.remote ? "AND held.held IS NOT NULL" : ""}
        ${q.metro ? "AND c.id IN (SELECT value FROM json_each($metro))" : ""}
-       ${q.hits ? "AND c.id IN (SELECT value FROM json_each($hits))" : ""}
    )`;
 
 /** One company as "Everything else" shows it, or null when it isn't there. */
@@ -422,21 +452,26 @@ export type RoleView = {
  * its roles) by first seen too. `view`: "inbox", the new ones that fit (what the Inbox
  * counts); "fit", every open role that fits, whatever you did with it (the Watchlist's company page);
  * "all", every open role, those that fit first, then near misses ("Everything else", Signals).
+ * `found`: the search box's (search.ts), only the roles it found here, in any state, those that
+ * fit first, then those with the words together.
  */
 export function companyRoles(
   companyId: number,
-  o: { view?: "inbox" | "fit" | "all"; cursor?: string | null; remote?: boolean; hits?: Hits | null } = {},
+  o: { view?: "inbox" | "fit" | "all"; cursor?: string | null; remote?: boolean; found?: Found | null } = {},
   now = new Date(),
 ): { roles: RoleView[]; next: string | null; held: number } {
   const d = open();
   const after = decodeCursor(o.cursor);
-  const view = o.view ?? "inbox";
-  // Found by the search through its roles: those roles, wherever they are (new or archived).
-  const found = o.hits && !o.hits.names.has(companyId) ? (o.hits.roles.get(companyId) ?? []) : null;
+  const found = o.found ? (o.found.roles.get(companyId) ?? []) : null;
+  const view = found ? "all" : (o.view ?? "inbox");
+  // Second in the order: a near miss; with a search, the words together.
+  const near = found
+    ? "(id IN (SELECT value FROM json_each($together)))"
+    : "(fits = 0 AND matched IS NOT NULL)";
   const rows = d
     .query(
       `SELECT id, title, location, mode, url, posted_at, first_seen, reposted, matched, fits, state, closed_at,
-         min(coalesce(posted_at, first_seen), first_seen) AS at, (fits = 0 AND matched IS NOT NULL) AS near
+         min(coalesce(posted_at, first_seen), first_seen) AS at, ${near} AS near
        FROM roles WHERE company_id = $company AND closed_at IS NULL
          ${view !== "all" ? "AND fits = 1" : ""}
          ${found ? "AND id IN (SELECT value FROM json_each($found))" : ""}
@@ -446,10 +481,10 @@ export function companyRoles(
                 AND ${sinceWatched(cameAt(), "(SELECT watched_at FROM companies WHERE id = $company)")}`
              : ""
          }
-         ${o.remote ? "AND mode = 'remote'" : ""}
+         ${o.remote && !found ? "AND mode = 'remote'" : ""}
          ${
            after
-             ? `AND (fits, (fits = 0 AND matched IS NOT NULL), min(coalesce(posted_at, first_seen), first_seen), id)
+             ? `AND (fits, ${near}, min(coalesce(posted_at, first_seen), first_seen), id)
                   < ($fits, $near, $at, $id)`
              : ""
          }
@@ -459,7 +494,12 @@ export function companyRoles(
       company: companyId,
       limit: PAGE + 1,
       ...(view === "inbox" && !found ? { cutoff: cutoff(now) } : {}),
-      ...(found ? { found: JSON.stringify(found) } : {}),
+      ...(found
+        ? {
+            found: JSON.stringify(found),
+            together: JSON.stringify(found.filter((id) => o.found!.together.has(id))),
+          }
+        : {}),
       ...(after ? { fits: after.n ?? 1, near: after.m ?? 0, at: after.at, id: after.id } : {}),
     }) as (Omit<RoleView, "place" | "fits" | "near" | "why" | "closed"> & {
     fits: number;
@@ -479,7 +519,7 @@ export function companyRoles(
       ...r,
       place: workMode({ title: r.title, location: r.location }).place,
       fits: fits === 1,
-      near: near === 1,
+      near: !found && near === 1,
       why: filters && !fits ? missed(r, filters, { place: false }) : null,
       closed: !!closed_at,
     })),

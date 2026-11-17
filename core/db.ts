@@ -277,6 +277,28 @@ export const MIGRATIONS: string[] = [
   -- cameAt). Null while it fits from the start, and for every role that fit before this.
   ALTER TABLE roles ADD COLUMN fit_at TEXT;
   `,
+  `
+  -- The Inbox's search over kept descriptions (inbox/search.ts): role_text's words, indexed by role
+  -- id, the text itself not copied. Kept in step by triggers: a text added, changed, moved to
+  -- another role (intake/import.ts) or dropped. Never REPLACE INTO role_text: its delete fires no
+  -- trigger, and the old words would stay indexed.
+  CREATE VIRTUAL TABLE role_fts USING fts5(text, content = '', contentless_delete = 1,
+    tokenize = "unicode61 remove_diacritics 2 tokenchars '+#'");
+  INSERT INTO role_fts (rowid, text) SELECT role_id, text FROM role_text;
+  CREATE TRIGGER role_text_added AFTER INSERT ON role_text BEGIN
+    INSERT INTO role_fts (rowid, text) VALUES (new.role_id, new.text);
+  END;
+  CREATE TRIGGER role_text_dropped AFTER DELETE ON role_text BEGIN
+    DELETE FROM role_fts WHERE rowid = old.role_id;
+  END;
+  CREATE TRIGGER role_text_changed AFTER UPDATE OF role_id, text ON role_text
+    WHEN new.text IS NOT old.text OR new.role_id IS NOT old.role_id BEGIN
+    DELETE FROM role_fts WHERE rowid = old.role_id;
+    INSERT INTO role_fts (rowid, text) VALUES (new.role_id, new.text);
+  END;
+  -- A role whose description couldn't be read (Read them, inbox/read.ts): not asked again for 30 days.
+  ALTER TABLE roles ADD COLUMN text_missed_at TEXT;
+  `,
 ];
 
 // The meta keys the one-time repairs set once they ran (intake/repair.ts, sources/hn/index.ts).

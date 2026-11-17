@@ -402,42 +402,97 @@ test("pages are 50 companies, keyset-paged, newest first", () => {
   expect([first.count, second.count]).toEqual([PAGE + 5, undefined]); // the count rides on the first page
 });
 
-test("search: a company by its name, its roles or its signal, in both lists", async () => {
-  withRoles("Tamlo", "tamlo.com", [job("1", "Backend Engineer")]);
-  withRoles("Acme", "acme.ai", [job("2", "Forward Deployed Engineer"), job("3", "Platform Engineer")]);
-  withRoles("Bayco", "bayco.dev", [job("4", "Trust Engineer")]);
-  withRoles("Oldco", "oldco.dev", [job("5", "Forward Deployed Engineer")], ago(30)); // Everything else
-  const { searchHits } = await import("./search.ts");
-  const names = (q: string) => [
-    inboxPage({ hits: searchHits(q, {}, now) }, now)
-      .companies.map((c) => c.name)
-      .sort(),
-    othersPage({ hits: searchHits(q, {}, now) }, now).companies.map((c) => c.name),
-  ];
-  expect(names("tamlo")).toEqual([["Tamlo"], []]);
-  expect(names("qiullmark")).toEqual([[], []]);
-  expect(names("tamloo")).toEqual([["Tamlo"], []]); // a typo, in a name only
-  expect(names("forward deployed")).toEqual([["Acme"], ["Oldco"]]);
-  expect(names("rust")).toEqual([[], []]); // "Trust" doesn't start with it
-  expect(names("ai")).toEqual([[], []]); // a domain's ending isn't its name
-  expect(inboxCount({ hits: searchHits("forward", {}, now) }, now)).toBe(1);
-
-  // Found by a role: the row says what matched and opens to those roles; by name: as without a search.
-  const hits = searchHits("forward", {}, now);
-  const acme = inboxPage({ hits }, now).companies[0]!;
-  expect([acme.hits, acme.hitRoles]).toEqual([["Forward Deployed Engineer"], 1]);
-  expect(companyRoles(acme.id, { hits }, now).roles.map((r) => r.title)).toEqual([
-    "Forward Deployed Engineer",
+test("search: every word somewhere in any open role, fitting first; a word that finds nothing says so", async () => {
+  const tamlo = withRoles("Tamlo", "tamlo.com", [job("1", "Backend Engineer", "Denver, CO")]);
+  const acme = withRoles("Acme", "acme.ai", [
+    job("2", "Forward Deployed Engineer"),
+    job("3", "Platform Engineer"),
+    job("6", "Data Analyst", "Boulder, Colorado"), // doesn't fit: no title word
   ]);
-  const tamlo = inboxPage({ hits: searchHits("tamlo", {}, now) }, now).companies[0]!;
-  expect(tamlo.hits).toBeUndefined();
+  withRoles("Bayco", "bayco.dev", [job("4", "Trust Engineer")]);
+  withRoles("Oldco", "oldco.dev", [job("5", "Full-Stack Engineer (C#)")], ago(30));
+  const { search } = await import("./search.ts");
+  const { searchPage } = await import("./query.ts");
+  const names = (q: string) => searchPage(q, {}, now).companies.map((c) => c.name);
+  const role = (title: string) =>
+    (open().query("SELECT id FROM roles WHERE title = ?").get(title) as { id: number }).id;
+  expect(names("tamlo")).toEqual(["Tamlo"]);
+  expect(names("forward deployed")).toEqual(["Acme"]);
+  expect(names("rust")).toEqual([]); // "Trust" doesn't start with it
+  expect(names("full stack c#")).toEqual(["Oldco"]); // however it's written, old or not
+  expect(names("fullstack")).toEqual(["Oldco"]);
+  expect(names("engineer -platform -forward -trust -full")).toEqual(["Tamlo"]);
+  expect(names("-clearance")).toEqual([]); // nothing to look for
+  // A state's name finds its code in a place, and the code typed in capitals its name.
+  expect(names("engineer colorado")).toEqual(["Tamlo"]);
+  expect(names("analyst CO")).toEqual(["Acme"]);
 
-  // Through the route: q is read, trimmed, and the same words narrow the count.
+  // Descriptions: kept in step with role_text, whatever writes it.
+  const text = (id: number, t: string) =>
+    open()
+      .query(
+        "INSERT INTO role_text (role_id, text, fetched_at) VALUES (?, ?, '') ON CONFLICT(role_id) DO UPDATE SET text = excluded.text",
+      )
+      .run(id, t);
+  text(role("Platform Engineer"), "Join the AI & Data team.");
+  text(role("Data Analyst"), "Pay range for Colorado: $1.");
+  const markText = () =>
+    open().query("UPDATE meta SET value = value || '.' WHERE key = 'intake_changed_at'").run();
+  markText();
+  expect(names("acme ai data")).toEqual(["Acme"]);
+  const found = search("acme ai data", now);
+  expect(found.roles.get(acme)).toContain(role("Platform Engineer"));
+  expect(names('"ai & data"')).toEqual(["Acme"]);
+  expect(names("analyst colorado")).toEqual(["Acme"]); // its place, not its pay note
+  text(role("Platform Engineer"), "Join the platform team.");
+  markText();
+  expect(names("acme ai data")).toEqual([]);
+  open()
+    .query("UPDATE role_text SET role_id = ? WHERE role_id = ?")
+    .run(role("Forward Deployed Engineer"), role("Platform Engineer"));
+  open().query("DELETE FROM role_text WHERE role_id = ?").run(role("Data Analyst"));
+  markText();
+  expect(search("platform team", now).roles.get(acme)).toEqual([role("Forward Deployed Engineer")]);
+  expect(names("pay range")).toEqual([]);
+
+  // Fitting first, and a role that doesn't fit says why.
+  const rows = companyRoles(acme, { found: search("acme", now) }, now).roles;
+  expect(rows.map((r) => r.fits)).toEqual([true, true, false]);
+  expect(rows[2]!.title).toBe("Data Analyst");
+  expect(rows[2]!.why).toBe("title has none of your words");
+
+  // A word that finds nothing: how many without it, and a company it may have meant.
+  expect(search("tamloo", now).missing).toEqual({
+    word: "tamloo",
+    anywhere: false,
+    without: 0,
+    meant: "Tamlo",
+  });
+  expect(search("backend engineer zanzibar", now).missing).toEqual({
+    word: "zanzibar",
+    anywhere: false,
+    without: 1,
+    meant: null,
+  });
+  expect(search("backend engineer acme", now).missing).toMatchObject({ word: "backend", anywhere: true });
+
+  // Through the route.
   const { feature } = await import("./server.ts");
-  const route = feature.routes!["/api/inbox"] as { GET: (req: Request) => Response };
-  const body = (await route.GET(new Request("http://x/api/inbox?q=%20Tamlo%20")).json()) as {
-    companies: { name: string }[];
+  const route = feature.routes!["/api/inbox/search"] as { GET: (req: Request) => Response };
+  const body = (await route.GET(new Request("http://x/api/inbox/search?q=%20Tamlo%20")).json()) as {
+    companies: { id: number; hitRoles: number }[];
     count: number;
   };
-  expect([body.companies.map((c) => c.name), body.count]).toEqual([["Tamlo"], 1]);
+  expect([body.companies.map((c) => [c.id, c.hitRoles]), body.count]).toEqual([[[tamlo, 1]], 1]);
+});
+
+test("nothing writes role_text with REPLACE: its delete fires no trigger, and the search would keep old words", async () => {
+  const { Glob } = await import("bun");
+  const root = new URL("..", import.meta.url).pathname;
+  const bad: string[] = [];
+  for await (const f of new Glob("*/**/*.ts").scan({ cwd: root }))
+    if (!f.startsWith("node_modules/") && !f.startsWith("vendor/") && !f.endsWith(".test.ts"))
+      for (const line of (await Bun.file(`${root}${f}`).text()).split("\n"))
+        if (!/^\s*(--|\/\/|\*)/.test(line) && /REPLACE\s+INTO\s+role_text/i.test(line)) bad.push(f);
+  expect(bad).toEqual([]);
 });
