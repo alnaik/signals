@@ -7,7 +7,7 @@ import { startApply } from "../apply/board.tsx";
 import { ago, safeHref, shortDate } from "../board/format.ts";
 import type { BoardFeature, Ctx } from "../board/slots.ts";
 import { Copy } from "../board/ui.tsx";
-import { workCompany } from "../decisions/board.tsx";
+import { work, workCompany } from "../decisions/board.tsx";
 import { type Filters, RoleRow, useCompanies } from "../inbox/board.tsx";
 import type { RoleView } from "../inbox/query.ts";
 import type { SignalsCompany, View } from "./query.ts";
@@ -321,6 +321,7 @@ function List({
     if (res.ok && out.thread) {
       ctx.open(out.thread);
       if (out.url) await startApply(ctx, out.thread, out.url);
+      if (out.work) await work(ctx, out.thread);
     }
   };
   const actCompany = async (company: number, action: string) => {

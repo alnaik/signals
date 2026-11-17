@@ -271,6 +271,23 @@ test("Work on a company with no role: its thread opens with what named it and no
   });
 });
 
+test("Work on it, on a role: the role joins the thread as a posting, nothing is chosen, and twice adds it once", () => {
+  const id = withRoles("Pellucid", "pellucid.dev", [job("7", "Platform Engineer", "Denver, CO")]);
+  const role = open().query("SELECT id FROM roles WHERE company_id = ?").get(id) as { id: number };
+  expect(chooseRole(role.id, "work", now)).toMatchObject({ ok: true, thread: "pellucid.dev", work: true });
+  const log = read("pellucid.dev");
+  expect(log.map((e) => e.kind)).toEqual(["signal"]);
+  expect(log[0]).toMatchObject({
+    data: { company: "Pellucid", kind: "posting", title: "Platform Engineer", location: "Denver, CO" },
+    source: { url: "https://jobs.lever.co/acme/7" },
+  });
+  // Not applied: the role is still new and in the Inbox; the thread shows it to apply to.
+  expect(open().query("SELECT state FROM roles WHERE id = ?").get(role.id)).toEqual({ state: "new" });
+  expect(index.get("pellucid.dev")?.roles.map((r) => r.status)).toEqual(["apply"]);
+  chooseRole(role.id, "work", now);
+  expect(read("pellucid.dev")).toHaveLength(1);
+});
+
 test("Everything else: every company with a board the Inbox doesn't list, all its open roles, those that fit first", () => {
   const acme = withRoles("Acme", "acme.dev", [job("1", "Backend Engineer")]);
   const quiet = withRoles(

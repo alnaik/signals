@@ -4,7 +4,7 @@ import { age, ago, roleHref, safeHref, shortDate } from "../board/format.ts";
 import { SectionHead } from "../board/Queue.tsx";
 import type { BoardFeature, Ctx } from "../board/slots.ts";
 import { Copy, EmptyHint, ModeBadge, RoleText } from "../board/ui.tsx";
-import { workCompany } from "../decisions/board.tsx";
+import { work, workCompany } from "../decisions/board.tsx";
 import { useAdding } from "../watchlist/board.tsx";
 import type { InboxCompany, RoleView } from "./query.ts";
 
@@ -106,6 +106,7 @@ export function RoleRow({
           <Btn label="Apply" primary onClick={() => act(r.id, "apply")} />
           {!watched && <Btn label="Apply + Watch" onClick={() => act(r.id, "apply_watch")} />}
           <Btn label="Dismiss" onClick={() => act(r.id, "dismiss")} />
+          <Btn label="Work on it" onClick={() => act(r.id, "work")} />
         </div>
       </div>
       {open &&
@@ -514,6 +515,7 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
     if (res.ok && out.thread) {
       ctx.open(out.thread);
       if (out.url) await startApply(ctx, out.thread, out.url);
+      if (out.work) await work(ctx, out.thread);
     }
   };
   const actCompany = async (list: List, company: number, action: string) => {

@@ -34,8 +34,9 @@ async function startWork(ctx: Ctx, id: string): Promise<void> {
   if (res.ok) await ctx.refetch(id);
 }
 
-/** Work on a thread, or first the positioning offer when there is no page and it wasn't put off. */
-async function work(ctx: Ctx, id: string): Promise<void> {
+/** Work on a thread, or first the positioning offer when there is no page and it wasn't put off.
+ * Also Work on it on a role (the Inbox, Signals), once the role is on the thread. */
+export async function work(ctx: Ctx, id: string): Promise<void> {
   if (!localStorage.getItem(LATER)) {
     const p = (await fetch("/api/positioning")
       .then((r) => r.json())

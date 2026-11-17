@@ -3,7 +3,7 @@
 // a whole company, out of the Inbox; Watch puts the company on the Watchlist, and it comes back
 // here only with roles first seen since. Clear, on a watched company, takes its new roles out of
 // the Inbox and keeps watching it. Work, on a company with no role, opens its thread for a cold
-// message.
+// message; Work on it, on a role, puts the role on the thread (nothing chosen) for Work to use.
 import { open } from "../core/db.ts";
 import * as index from "../core/index-db.ts";
 import { append, read } from "../core/log.ts";
@@ -18,13 +18,13 @@ import {
 } from "../intake/companies.ts";
 import { sinceWatched } from "./query.ts";
 
-export type RoleAction = "apply" | "apply_watch" | "dismiss";
+export type RoleAction = "apply" | "apply_watch" | "dismiss" | "work";
 export type CompanyAction = "watch" | "dismiss" | "apply_email" | "work";
-export const ROLE_ACTIONS: RoleAction[] = ["apply", "apply_watch", "dismiss"];
+export const ROLE_ACTIONS: RoleAction[] = ["apply", "apply_watch", "dismiss", "work"];
 export const COMPANY_ACTIONS: CompanyAction[] = ["watch", "dismiss", "apply_email", "work"];
 
 export type ChooseResult =
-  | { ok: true; toast: string; company: number; thread?: string; url?: string }
+  | { ok: true; toast: string; company: number; thread?: string; url?: string; work?: boolean }
   | { ok: false; status: number; toast: string };
 
 type RoleRow = {
@@ -45,6 +45,7 @@ export function chooseRole(roleId: number, action: RoleAction, now = new Date())
     .query("SELECT id, company_id, title, location, url, state, first_seen, reposted FROM roles WHERE id = ?")
     .get(roleId) as RoleRow | null;
   if (!r) return { ok: false, status: 404, toast: "That role isn't known" };
+  if (action === "work") return workRole(r, now);
   // "archived": out of the Inbox (three weeks old, or not news when it arrived) but still open.
   if (r.state !== "new" && r.state !== "archived")
     return { ok: false, status: 409, toast: "Already chosen: see the thread" };
@@ -56,8 +57,26 @@ export function chooseRole(roleId: number, action: RoleAction, now = new Date())
     return { ok: true, toast: `Dismissed · ${r.title}`, company: c.id };
   }
   const thread = threadIdOf(c);
-  const text = d.query("SELECT text FROM role_text WHERE role_id = ?").get(roleId) as { text: string } | null;
   // The role joins the company's thread as the board shows it, then the choice.
+  appendPosting(thread, c, r, now);
+  append(thread, {
+    actor: "board",
+    kind: "decision",
+    ts: now.toISOString(),
+    data: { action: "apply", url: r.url },
+  });
+  d.query("UPDATE roles SET state = 'applied', state_at = ? WHERE id = ?").run(now.toISOString(), roleId);
+  if (action === "apply_watch") watchCompany(c.id, "inbox", now);
+  index.reindex(thread);
+  const verb = action === "apply_watch" ? "Applying and watching" : "Applying";
+  return { ok: true, toast: `${verb} · ${c.name}`, company: c.id, thread, url: r.url };
+}
+
+/** A role on its company's thread, as the board shows it: a posting, with its text when kept. */
+function appendPosting(thread: string, c: Company, r: RoleRow, now: Date): void {
+  const text = open().query("SELECT text FROM role_text WHERE role_id = ?").get(r.id) as {
+    text: string;
+  } | null;
   append(thread, {
     actor: "ats",
     kind: "signal",
@@ -77,17 +96,21 @@ export function chooseRole(roleId: number, action: RoleAction, now = new Date())
       fetched_at: r.first_seen,
     },
   });
-  append(thread, {
-    actor: "board",
-    kind: "decision",
-    ts: now.toISOString(),
-    data: { action: "apply", url: r.url },
-  });
-  d.query("UPDATE roles SET state = 'applied', state_at = ? WHERE id = ?").run(now.toISOString(), roleId);
-  if (action === "apply_watch") watchCompany(c.id, "inbox", now);
-  index.reindex(thread);
-  const verb = action === "apply_watch" ? "Applying and watching" : "Applying";
-  return { ok: true, toast: `${verb} · ${c.name}`, company: c.id, thread, url: r.url };
+}
+
+/**
+ * Work on it, on one role: the role joins its company's thread as Apply puts it there, but nothing is
+ * chosen (no decision, the role stays where it was in the Inbox); the board then asks Work to start,
+ * which reads the thread's roles. A role already on the thread isn't added twice.
+ */
+function workRole(r: RoleRow, now: Date): ChooseResult {
+  const c = getCompany(r.company_id)!;
+  const thread = threadIdOf(c);
+  if (!read(thread).some((e) => e.kind === "signal" && e.source?.url === r.url)) {
+    appendPosting(thread, c, r, now);
+    index.reindex(thread);
+  }
+  return { ok: true, toast: `Working on ${c.name} · ${r.title}`, company: c.id, thread, work: true };
 }
 
 export function chooseCompany(companyId: number, action: CompanyAction, now = new Date()): ChooseResult {
