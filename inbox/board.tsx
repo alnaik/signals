@@ -93,7 +93,7 @@ export function RoleRow({
           >
             {r.title}
           </a>
-          <span className="muted">
+          <span className="muted" title={r.location || undefined}>
             {r.place || (r.mode && r.mode !== "unknown" ? "" : r.location || "location unknown")}
           </span>
           <ModeBadge mode={r.mode} />

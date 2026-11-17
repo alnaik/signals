@@ -22,6 +22,19 @@ export const sinceWatched = (firstSeen: string, watchedAt: string) =>
   `${firstSeen} >= coalesce(${watchedAt}, '')`;
 
 /**
+ * A role's place, short: a posting open in 31 cities ("Atlanta, Georgia, United States · Austin, …")
+ * shows two, yours first, and how many more (the full list is the row's tooltip).
+ */
+export function shortPlace(place: string, f: ReturnType<typeof loadFilters>): string {
+  const parts = place.split(/\s+·\s+|;\s*/).filter(Boolean);
+  if (parts.length <= 3) return place;
+  const us = usPlaces(f);
+  const mine = parts.filter((p) => inMetro(p, f.locations ?? [], us));
+  const shown = [...mine, ...parts.filter((p) => !mine.includes(p))].slice(0, 2);
+  return `${shown.join(" · ")} · +${parts.length - 2} more`;
+}
+
+/**
  * When a role became one for you: first seen, or later, when it started to fit (`fit_at`: a title
  * word added, the title rules changed, its place read from its page). "New", the 21 days and
  * sinceWatched count from here, so a role that starts to fit reaches the Inbox like one just posted.
@@ -514,10 +527,11 @@ export function companyRoles(
     }
   ).n;
   const filters = page.some((r) => !r.fits) ? loadFilters() : null;
+  const yours = loadFilters();
   return {
     roles: page.map(({ closed_at, fits, near, ...r }) => ({
       ...r,
-      place: workMode({ title: r.title, location: r.location }).place,
+      place: shortPlace(workMode({ title: r.title, location: r.location }).place, yours),
       fits: fits === 1,
       near: !found && near === 1,
       why: filters && !fits ? missed(r, filters, { place: false }) : null,
