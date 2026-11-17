@@ -128,7 +128,8 @@ export async function useFirst(name: string): Promise<void> {
 }
 
 // The limits a person sets in Settings, each one line of config.toml: [section] key, and what it is.
-export const LIMITS: { section: string; key: string; label: string }[] = [
+// Dollars, except a `count` (whole numbers): the background checks a day, board search's searches.
+export const LIMITS: { section: string; key: string; label: string; count?: boolean }[] = [
   { section: "caps", key: "month_usd", label: "Real money a month, everything together" },
   { section: "caps", key: "run_usd", label: "One Work run's model, on an API key" },
   { section: "caps", key: "run_provider_usd", label: "One Work run's paid lookups" },
@@ -138,16 +139,34 @@ export const LIMITS: { section: string; key: string; label: string }[] = [
     section: "caps",
     key: "background_day",
     label: "Background model checks a day, on a Claude subscription (a count, not dollars)",
+    count: true,
+  },
+  {
+    section: "source.board-search",
+    key: "month_credits",
+    label: "Board searches a month (a count, not dollars; Context.dev's free month is 1,000)",
+    count: true,
   },
 ];
 
-/** One limit, in dollars (background_day: a count): rewrites that one line of its section. */
+/** A limit's value in the config: its section may be dotted ([source.board-search]). */
+function limitValue(section: string, key: string): number {
+  const at = section
+    .split(".")
+    .reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], loadConfig()) as
+    | Record<string, unknown>
+    | undefined;
+  return Number(at?.[key] ?? 0);
+}
+
+/** One limit, in dollars or a count: rewrites that one line of its section. */
 export function setLimit(section: string, key: string, usd: unknown): void {
-  if (!LIMITS.some((l) => l.section === section && l.key === key)) throw new Error("Unknown limit");
+  const limit = LIMITS.find((l) => l.section === section && l.key === key);
+  if (!limit) throw new Error("Unknown limit");
   const n = Number(usd);
   if (String(usd).trim() === "" || !Number.isFinite(n) || n < 0)
     throw new Error("A limit is a number, 0 or more");
-  const line = `${key} = ${key === "background_day" ? Math.round(n) : n}`;
+  const line = `${key} = ${limit.count ? Math.round(n) : n}`;
   const re = new RegExp(`^${key}\\s*=.*$`, "m");
   writeConfig(
     editSection(configText(), `[${section}]`, (body) =>
@@ -261,12 +280,7 @@ export async function status() {
     cv: pdfs().length > 0,
     // Real money this month against caps.month_usd. Never shown on the Threads screen.
     spend: { month: monthSpend(), cap: loadConfig().caps.month_usd, history: spendHistory() },
-    limits: LIMITS.map((l) => ({
-      ...l,
-      usd: Number(
-        (loadConfig() as unknown as Record<string, Record<string, unknown>>)[l.section]?.[l.key] ?? 0,
-      ),
-    })),
+    limits: LIMITS.map((l) => ({ ...l, usd: limitValue(l.section, l.key) })),
     // Per paid service: Context.dev's own count for its period, the rest from the ledger.
     usage: await spendNow(),
     providers: await providerRows(),

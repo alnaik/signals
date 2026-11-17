@@ -43,7 +43,7 @@ type Status = {
     };
   };
   providers: Record<string, ProviderRow[]>;
-  limits: { section: string; key: string; label: string; usd: number }[];
+  limits: { section: string; key: string; label: string; count?: boolean; usd: number }[];
   prompt: string;
 };
 type ProviderRow = {
@@ -195,8 +195,8 @@ function Limits({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <span className="muted" style={{ fontSize: 13 }}>
-        Limits, in US dollars except the last, a count. Past one, those steps wait and the rest still run;
-        Work you start yourself is never held by the count.
+        Limits, in US dollars except the last two, counts. Past one, those steps wait and the rest still run;
+        Work you start yourself is never held by the background count.
       </span>
       {limits.map((l) => {
         const id = `${l.section}.${l.key}`;
@@ -209,7 +209,7 @@ function Limits({
             <span>{l.label}</span>
             <input
               aria-label={l.label}
-              inputMode="decimal"
+              inputMode={l.count ? "numeric" : "decimal"}
               value={v}
               onChange={(e) => setEdit({ ...edit, [id]: e.target.value })}
             />

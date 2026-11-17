@@ -8,7 +8,7 @@ import { tempData } from "../core/testing.ts";
 import { setProviders } from "../providers/registry.ts";
 import { METROS, wordsOf } from "./metros.ts";
 import { placesFrom, placesOf } from "./places.tsx";
-import { savePositioning, saveProfile, setDataDir, setLimit } from "./state.ts";
+import { savePositioning, saveProfile, setDataDir, setLimit, status } from "./state.ts";
 
 const data = tempData();
 afterAll(data.cleanup);
@@ -63,6 +63,19 @@ test("a spend limit set in Settings is one line of config.toml; the rest stays a
   );
   expect(() => setLimit("caps", "month_usd", "-1")).toThrow("0 or more");
   expect(() => setLimit("robots", "exceptions", 1)).toThrow("Unknown limit");
+});
+
+test("board search's monthly count is a limit too: a whole number in its dotted section, shown back", async () => {
+  writeFileSync(
+    paths.config(),
+    '[caps]\nmonth_usd = 5\n\n[source.board-search]\non = true\nmonth_credits = 1000 # spare\n\n[source.funds]\npicks = ["a"]\n',
+  );
+  setLimit("source.board-search", "month_credits", "499.6");
+  expect(readFileSync(paths.config(), "utf8")).toBe(
+    '[caps]\nmonth_usd = 5\n\n[source.board-search]\non = true\nmonth_credits = 500\n\n[source.funds]\npicks = ["a"]\n',
+  );
+  const shown = (await status()).limits.find((l) => l.key === "month_credits");
+  expect(shown).toMatchObject({ section: "source.board-search", count: true, usd: 500 });
 });
 
 test("a picked metro brings its towns and reads as American without taking its whole state", () => {
