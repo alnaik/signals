@@ -61,17 +61,27 @@ export function Copy({
   );
 }
 
-/** A role's text from its board, shown on expand. Boards send HTML (some of it entity-encoded): shown as text. */
+/**
+ * A role's text from its board, shown on expand. Boards send HTML (some of it entity-encoded): shown as text.
+ * A long one shows its start and "Show all": a box of its own that scrolls put a scrollbar beside the words.
+ */
 export function RoleText({ text }: { text: string }) {
+  const [all, setAll] = useState(false);
   let t = text;
   for (let i = 0; i < 2 && /<\w|&#?\w+;/.test(t); i++)
     t = new DOMParser().parseFromString(t, "text/html").body.textContent ?? "";
+  t = t.trim();
+  const long = t.length > 1200;
   return (
-    <div
-      className="muted"
-      style={{ whiteSpace: "pre-wrap", fontSize: 13, maxHeight: 320, overflow: "auto", padding: "6px 0" }}
-    >
-      {t.trim()}
+    <div className="muted" style={{ whiteSpace: "pre-wrap", fontSize: 13, padding: "6px 0" }}>
+      {long && !all ? `${t.slice(0, 1200).replace(/\s+\S*$/, "")}…` : t}
+      {long && (
+        <div style={{ marginTop: 6 }}>
+          <button type="button" className="link" onClick={() => setAll(!all)}>
+            {all ? "Show less" : "Show all"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
