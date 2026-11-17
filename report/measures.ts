@@ -4,7 +4,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { loadConfig } from "../core/config.ts";
 import { open } from "../core/db.ts";
-import type { Channel } from "../core/derive.ts";
+import { type Channel, derive } from "../core/derive.ts";
 import { entries, monthSpend, monthStart, spendBy } from "../core/ledger.ts";
 import { type Entry, read } from "../core/log.ts";
 import { paths } from "../core/paths.ts";
@@ -112,9 +112,10 @@ export function people() {
       replied++;
       hours.push((Date.parse(m.reply) - Date.parse(m.sent)) / 3_600_000);
     }
-    const contact = log.findLast((e) => e.kind === "contact" && e.data.name);
+    // The thread's person as the board shows it (derive's main one), not its last contact line.
+    const contact = derive(log).contacts.find((c) => c.main && c.name);
     if (!contact) continue;
-    const emails = ((contact.data.channels ?? []) as Channel[]).filter((c) => c.channel === "email");
+    const emails = contact.channels.filter((c: Channel) => c.channel === "email");
     const best = emails.sort((a, b) => RANK[b.confidence] - RANK[a.confidence])[0];
     const k: Bucket = best?.confidence ?? "no email";
     const b = buckets.get(k) ?? { people: 0, sent: 0, replied: 0 };
