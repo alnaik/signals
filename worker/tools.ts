@@ -53,11 +53,11 @@ export function workerTools(id: string, run?: string): ToolDef[] {
           const bad = part.facts.filter((n) => !known.has(n));
           if (bad.length) throw new Error(`No such fact: ${bad.join(", ")}. Cite numbers from the list.`);
         }
-        // A person is a name the gather found, never one from memory.
+        // A person is a name the gather found or you saved, never one from memory.
         const name = b.person.name.trim();
         const where = [
           ...d.facts.map((f) => `${f.text} ${f.source?.quote ?? ""}`),
-          d.contact?.name ?? "",
+          ...d.contacts.map((c) => c.name),
         ].map(folded);
         if (name && !where.some((w) => w.includes(folded(name))))
           throw new Error(

@@ -108,6 +108,9 @@ export function prompt(id: string): string {
   const who = d.contact?.name
     ? `Gathered contact: ${d.contact.name}, ${d.contact.role}.`
     : "No contact was gathered.";
+  // People saved beside the thread's person (Look up, an earlier run): known, named in one line.
+  const others = d.contacts.filter((c) => !c.main).map((c) => [c.name, c.role].filter(Boolean).join(", "));
+  const also = others.length ? `Also saved on this thread: ${others.join("; ")}.` : "";
   // Whose run it is: the name in About you, else plainly "the candidate".
   const name = String(profile().full_name ?? "").trim();
   const whose = name ? `${name}'s` : "The candidate's";
@@ -116,6 +119,7 @@ export function prompt(id: string): string {
     `Thread ${id}: ${d.company || id}. Roles: ${d.roles.map((r) => r.title).join("; ") || "none"}.`,
     `Facts:\n${facts.join("\n") || "(none)"}`,
     who,
+    also,
     `${whose} positioning:\n${readMe("positioning.md") || "(not written yet)"}`,
     `${whose} evidence (claims with links):\n${readMe("evidence.jsonl") || "(none)"}`,
     "Write the block with write_block, once.",

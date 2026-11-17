@@ -295,8 +295,9 @@ function LookupItem({ ctx, l }: { ctx: Ctx; l: Lookup }) {
           {l.results?.skipped?.length ? <span className="faint">{l.results.skipped.join(" · ")}</span> : null}
           {people.length > 0 && (
             <span className="muted">
-              Save puts a person on {l.results?.company.name}'s thread, opening it if there is none: the
-              thread becomes "person found".
+              Save puts a person on {l.results?.company.name}'s thread, opening it if there is none. A thread
+              with no one becomes "person found"; one that has a person keeps them, and this one is added
+              beside them.
             </span>
           )}
           {people.map((p, n) => (

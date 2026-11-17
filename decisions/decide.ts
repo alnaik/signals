@@ -60,8 +60,24 @@ export function decide(id: string, body: Record<string, any>, now = new Date()):
       if (body.what) data.what = String(body.what);
       toast = "Copied";
       break;
+    case "remove_contact": {
+      const c = t.contacts.find((x) => x.id === body.entry);
+      if (!c) return no("That person isn't on this thread", 400);
+      data.entry = c.id;
+      data.name = c.name;
+      // Removing the thread's person: the next one becomes it.
+      const gone: Entry = { id: "", ts: now.toISOString(), actor: "board", kind: "decision", data, refs: [] };
+      const next = c.main ? derive([...log, gone], now).contact : null;
+      toast = `Removed ${c.name}${next ? ` · ${next.name} is the person now` : ""}`;
+      break;
+    }
   }
-  const entry = append(id, { actor: "board", kind: "decision", data });
+  const entry = append(id, {
+    actor: "board",
+    kind: "decision",
+    data,
+    ...(action === "remove_contact" ? { refs: [data.entry as string] } : {}),
+  });
   const company =
     action === "apply" || action === "applied" || action === "drop"
       ? roleFollows(id, data.url as string, action, now)

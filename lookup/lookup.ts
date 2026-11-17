@@ -6,9 +6,10 @@
 
 import { loadConfig } from "../core/config.ts";
 import { DAY, open, tx } from "../core/db.ts";
+import { type Channel, derive } from "../core/derive.ts";
 import * as index from "../core/index-db.ts";
 import { capLeft } from "../core/ledger.ts";
-import { append, threadId } from "../core/log.ts";
+import { append, read, threadId } from "../core/log.ts";
 import { isStandIn } from "../core/vocab.ts";
 import { chooseCompany } from "../inbox/choose.ts";
 import { companyByDomain, companyByName, getCompany, upsertCompany } from "../intake/companies.ts";
@@ -361,7 +362,9 @@ export function findEmail(
 
 /**
  * Save one person a lookup found to the company's thread: a contact entry, as Work's gather writes
- * it, which makes the thread "person found". The thread is opened first if the company has none.
+ * it. A thread with no one becomes "person found"; one that has a person keeps them, and this one is
+ * added beside them. The thread is opened first if the company has none. Saving an email the thread
+ * already has adds nothing.
  */
 export function saveFound(
   id: number,
@@ -380,6 +383,23 @@ export function saveFound(
   const opened = chooseCompany(companyId, "work", now);
   if (!opened.ok || !opened.thread) return { ok: false, status: 409, toast: opened.toast };
   const thread = opened.thread;
+  const saved = () =>
+    update(id, (x) => {
+      x.results!.people[n]!.saved = thread;
+    });
+  const before = derive(read(thread), now);
+  const emails = (cs: ContactHit[] | Channel[] | undefined) =>
+    (cs ?? []).filter((h) => h.channel === "email").map((h) => h.value.trim().toLowerCase());
+  const mine = emails(p.hits);
+  const same = before.contacts.find((x) =>
+    mine.length
+      ? emails(x.channels).some((v) => mine.includes(v))
+      : x.name.toLowerCase() === p.name.trim().toLowerCase(),
+  );
+  if (same) {
+    saved();
+    return { ok: true, toast: `${same.name} is already on ${c.name}'s thread`, thread };
+  }
   append(thread, {
     actor: "lookup",
     kind: "contact",
@@ -393,8 +413,13 @@ export function saveFound(
     },
   });
   index.reindex(thread);
-  update(id, (x) => {
-    x.results!.people[n]!.saved = thread;
-  });
-  return { ok: true, toast: `Saved ${p.name} to ${c.name}: the thread is now "person found"`, thread };
+  saved();
+  const beside = before.contact?.name;
+  return {
+    ok: true,
+    toast: beside
+      ? `Saved ${p.name} to ${c.name}, added beside ${beside}`
+      : `Saved ${p.name} to ${c.name}: the thread is now "person found"`,
+    thread,
+  };
 }

@@ -171,3 +171,79 @@ describe("a Work run's end", () => {
     expect(status([...log, done()])).not.toBe("researching");
   });
 });
+
+describe("the people on a thread", () => {
+  const lisa = () =>
+    e(
+      "contact",
+      {
+        name: "Lisa Wang",
+        role: "Engineering Manager",
+        confidence: "pattern",
+        channels: [{ channel: "email", value: "lisa@tessera.dev", confidence: "pattern" }],
+      },
+      { actor: "gather" },
+    );
+  const hillary = () =>
+    e(
+      "contact",
+      {
+        name: "Hillary Bush",
+        role: "",
+        confidence: "verified",
+        channels: [{ channel: "email", value: "hillary@tessera.dev", confidence: "verified" }],
+      },
+      { actor: "lookup" },
+    );
+  const research = (name: string) =>
+    e(
+      "research",
+      {
+        problem: { text: "p", facts: [] },
+        person: { name, role: "EM", text: "t", facts: [] },
+        proof: { text: "x", budget: "", facts: [] },
+      },
+      { actor: "worker" },
+    );
+  const emails = (log: Entry[]) => derive(log).channels.map((c) => c.value);
+
+  test("a person saved later sits beside the one Work found; it doesn't replace them", () => {
+    const log = [posting(), dec("work"), lisa(), research("lisa wang"), done(), hillary()];
+    const d = derive(log);
+    expect(d.contacts.map((c) => [c.name, c.actor, c.main])).toEqual([
+      ["Lisa Wang", "gather", true],
+      ["Hillary Bush", "lookup", false],
+    ]);
+    expect(d.contact).toEqual({ name: "Lisa Wang", role: "Engineering Manager" });
+    expect(emails(log)).toEqual(["lisa@tessera.dev"]);
+    expect(d.status).toBe("person found");
+    // With no research, Work's find is still the person, whoever was saved after it.
+    expect(emails([posting(), lisa(), hillary()])).toEqual(["lisa@tessera.dev"]);
+    // Only saved people: the latest one.
+    expect(derive([posting(), hillary()]).contact?.name).toBe("Hillary Bush");
+  });
+
+  test("the person research names stays the thread's person, even when Work found someone after", () => {
+    const h = hillary();
+    const log = [posting(), h, research("Hillary Bush"), done(), lisa()];
+    expect(derive(log).contact?.name).toBe("Hillary Bush");
+    expect(emails(log)).toEqual(["hillary@tessera.dev"]);
+  });
+
+  test("Remove takes a person back; removing the thread's person makes the next one it", () => {
+    const l = lisa();
+    const h = hillary();
+    const log = [posting(), dec("work"), l, research("Lisa Wang"), done(), h];
+    log.push(dec("remove_contact", { entry: h.id, name: "Hillary Bush" }));
+    expect(derive(log).contacts.map((c) => c.name)).toEqual(["Lisa Wang"]);
+    expect(derive(log).contact?.name).toBe("Lisa Wang");
+    log.push(dec("remove_contact", { entry: l.id, name: "Lisa Wang" }));
+    // No one left: the thread no longer reads "person found"; the research names Lisa still.
+    expect(derive(log)).toMatchObject({ contacts: [], contact: null, channels: [], status: null });
+    expect(derive(log).ran).toBe("researched");
+    // Removing the person with someone else saved: the other one becomes the person.
+    const two = [posting(), l, h, dec("remove_contact", { entry: l.id })];
+    expect(derive(two).contact?.name).toBe("Hillary Bush");
+    expect(emails(two)).toEqual(["hillary@tessera.dev"]);
+  });
+});

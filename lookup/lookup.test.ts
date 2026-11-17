@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { open } from "../core/db.ts";
 import { derive } from "../core/derive.ts";
 import { entries } from "../core/ledger.ts";
-import { read } from "../core/log.ts";
+import { append, read } from "../core/log.ts";
 import { paths } from "../core/paths.ts";
 import { tempData } from "../core/testing.ts";
 import { upsertCompany } from "../intake/companies.ts";
@@ -94,6 +94,43 @@ test("Find a person runs in the background on station lookup; Save writes a cont
   expect(contact.data.channels[0].value).toBe("ines@quillon.dev");
   expect(derive(read("quillon.dev")).status).toBe("person found");
   expect(getLookup(id)!.results!.people[0]!.saved).toBe("quillon.dev");
+});
+
+test("Save beside a person already on the thread adds them, says so, and the same email twice adds nothing", async () => {
+  setProviders([stub]);
+  upsertCompany({ name: "Brindle", domain: "brindle.io" });
+  // Work found Tomo first: the thread has its person.
+  const work = startLookup("person", { name: "Tomo Reyes", company: "Brindle", role: "Head of Engineering" });
+  await work.done;
+  saveFound(work.id, 0);
+  append("brindle.io", {
+    actor: "gather",
+    kind: "contact",
+    data: {
+      name: "Rui Sato",
+      role: "Engineering Manager",
+      confidence: "pattern",
+      channels: [{ channel: "email", value: "rui@brindle.io", confidence: "pattern" }],
+    },
+  });
+  const { id, done } = startLookup("person", { name: "Ines Varga", company: "Brindle", role: "CTO" });
+  await done;
+  expect(saveFound(id, 0)).toMatchObject({
+    ok: true,
+    toast: "Saved Ines Varga to Brindle, added beside Rui Sato",
+  });
+  const d = derive(read("brindle.io"));
+  expect(d.contacts.map((c) => c.name)).toEqual(["Tomo Reyes", "Rui Sato", "Ines Varga"]);
+  expect(d.contact?.name).toBe("Rui Sato");
+  expect(d.channels.map((c) => c.value)).toEqual(["rui@brindle.io"]);
+  // The same person (the same email) saved again, from this lookup or another: no new line.
+  const lines = read("brindle.io").length;
+  expect(saveFound(id, 0)).toMatchObject({ ok: true, toast: "Ines Varga is already on Brindle's thread" });
+  const again = startLookup("person", { name: "Ines Varga", company: "Brindle", role: "CTO" });
+  await again.done;
+  expect(saveFound(again.id, 0)).toMatchObject({ ok: true });
+  expect(getLookup(again.id)!.results!.people[0]!.saved).toBe("brindle.io");
+  expect(read("brindle.io")).toHaveLength(lines);
 });
 
 test("People at a company: Find email asks first after three presses in one lookup", async () => {

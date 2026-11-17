@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from "react";
-import type { Cited, Detail, Fact } from "../core/derive.ts";
+import type { Channel, Cited, Contact, Detail, Fact } from "../core/derive.ts";
 import type { Entry } from "../core/log.ts";
 import { isStandIn } from "../core/vocab.ts";
 import {
@@ -131,11 +131,11 @@ function Evidence({ d }: { d: Detail }) {
   );
 }
 
-function Channels({ d, ctx }: { d: Detail; ctx: Ctx }) {
-  if (d.channels.length === 0) return null;
+function Channels({ d, channels, ctx }: { d: Detail; channels: Channel[]; ctx: Ctx }) {
+  if (channels.length === 0) return null;
   return (
     <div className="channels">
-      {d.channels.map((c) =>
+      {channels.map((c) =>
         c.channel.toLowerCase() === "linkedin" ? (
           <div key={c.channel + c.value} style={{ display: "contents" }}>
             <span className="muted">LinkedIn</span>
@@ -165,6 +165,61 @@ function Channels({ d, ctx }: { d: Detail; ctx: Ctx }) {
         ),
       )}
     </div>
+  );
+}
+
+/** Who saved a person: Work's run, or you through Look up. */
+function savedBy(c: Contact): string {
+  if (c.actor === "gather" || c.actor === "worker") return "Work";
+  if (c.actor === "lookup") return "Look up";
+  return sentence(c.actor);
+}
+
+/** Where a person came from, and Remove: a line in the log that takes their contact back. */
+function SavedFrom({ d, c, ctx }: { d: Detail; c: Contact; ctx: Ctx }) {
+  return (
+    <span className="faint" style={{ fontSize: 12 }}>
+      from {savedBy(c)} ·{" "}
+      <button
+        type="button"
+        className="small link"
+        onClick={() => decide(ctx, d.id, { action: "remove_contact", entry: c.id })}
+      >
+        Remove
+      </button>
+    </span>
+  );
+}
+
+/** The Person line's channels are that person's own; everyone else saved is listed under it, each
+ * with theirs. */
+function People({ d, who, ctx }: { d: Detail; who: string; ctx: Ctx }) {
+  const fold = (x: string) => x.trim().toLowerCase();
+  const shown = d.contacts.find((c) => c.main && fold(c.name) === fold(who));
+  const others = d.contacts.filter((c) => c !== shown);
+  return (
+    <>
+      {shown && (
+        <div>
+          <SavedFrom d={d} c={shown} ctx={ctx} />
+        </div>
+      )}
+      {shown && <Channels d={d} channels={shown.channels} ctx={ctx} />}
+      {others.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+          <span className="muted">Also saved</span>
+          {others.map((c) => (
+            <div key={c.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span>
+                <span style={{ fontWeight: 600 }}>{[c.name, c.role].filter(Boolean).join(" · ")}</span>{" "}
+                <SavedFrom d={d} c={c} ctx={ctx} />
+              </span>
+              <Channels d={d} channels={c.channels} ctx={ctx} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -298,7 +353,7 @@ function Research({ d, ctx }: { d: Detail; ctx: Ctx }) {
             line={r ? { ...r.person, text } : undefined}
             d={d}
           >
-            <Channels d={d} ctx={ctx} />
+            <People d={d} who={who} ctx={ctx} />
           </Line>
         )}
         {r && <Line label={r.proof.budget ? `Proof · ${r.proof.budget}` : "Proof"} line={r.proof} d={d} />}
@@ -371,6 +426,7 @@ export function describe(e: Entry): string {
     case "signal":
       return `${d.source_tag ?? "signal"}${d.title ? `: ${d.title}` : ""}${e.source?.url ? ` · ${domainOf(e.source.url)}` : ""}`;
     case "decision":
+      if (d.action === "remove_contact") return `removed contact: ${d.name ?? d.entry}`;
       return [d.action.replaceAll("_", " "), d.reason, d.text, d.url, d.until && `until ${d.until}`]
         .filter(Boolean)
         .join(" · ");

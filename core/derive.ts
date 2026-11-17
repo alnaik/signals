@@ -11,6 +11,18 @@ export type Channel = {
   url?: string;
 };
 
+// One person saved to the thread: a contact entry, by Work's gather or Look up. A thread keeps
+// every one of them; `main` marks the one the thread is about (see mainContact).
+export type Contact = {
+  id: string; // the contact entry's id: Remove names it
+  name: string;
+  role: string;
+  channels: Channel[];
+  actor: string;
+  ts: string;
+  main: boolean;
+};
+
 export type Fact = {
   id: string;
   n: number;
@@ -65,7 +77,8 @@ export type Summary = {
 
 export type Detail = Summary & {
   facts: Fact[];
-  channels: Channel[];
+  channels: Channel[]; // the main person's
+  contacts: Contact[]; // everyone saved, oldest first, removed ones gone
   research: Research | null;
   entries: Entry[];
 };
@@ -96,6 +109,21 @@ export function isGathered(d: Record<string, unknown>): boolean {
   );
 }
 
+// Contacts Work wrote: the gather's, and the worker's before the redesign. Anyone else's (Look up)
+// was saved by you.
+const byWork = (actor: string) => actor === "gather" || actor === "worker";
+
+/** The thread's person: the one Work's research names, else the latest Work found, else the latest
+ * saved. Never just the last entry: a person saved later sits beside them, it doesn't replace them. */
+function mainContact(contacts: Contact[], named: string): Contact | undefined {
+  const fold = (x: string) => x.trim().toLowerCase();
+  return (
+    (named.trim() ? contacts.findLast((c) => fold(c.name) === fold(named)) : undefined) ??
+    contacts.findLast((c) => byWork(c.actor)) ??
+    contacts.at(-1)
+  );
+}
+
 export function derive(log: Entry[], now = new Date()): Detail {
   const first = log[0];
   const start = first?.ts ?? now.toISOString();
@@ -116,6 +144,7 @@ export function derive(log: Entry[], now = new Date()): Detail {
     problem: null,
     facts: [],
     channels: [],
+    contacts: [],
     research: null,
     entries: log,
   };
@@ -126,7 +155,7 @@ export function derive(log: Entry[], now = new Date()): Detail {
   let worked = false; // Work was pressed or a run ended, whoever it found: the thread stays in the list
   let lastRun: "done" | "stopped" | "no website" | null = null; // how the last worker run ended
   let stopped = 0; // runs that stopped early since; the second one leaves it to you
-  let contactAt = start;
+  const removed = new Set<string>(); // contact entries a Remove took back
   let workerDoneAt: string | null = null;
   const roles = new Map<string, Role>();
   const failed = new Set<string>();
@@ -197,6 +226,9 @@ export function derive(log: Entry[], now = new Date()): Detail {
           case "got_reply":
             if (phase?.word !== "closed") phase = { word: "replied", ts: e.ts };
             break;
+          case "remove_contact":
+            removed.add(String(d.entry));
+            break;
           case "close":
             close(String(d.reason ?? "").trim() || "closed", e.ts);
             break;
@@ -236,9 +268,15 @@ export function derive(log: Entry[], now = new Date()): Detail {
         break;
       case "contact":
         if (!isGathered(d)) break; // from before the redesign: a Timeline line only
-        s.contact = { name: d.name ?? "", role: d.role ?? "" };
-        s.channels = d.channels ?? [];
-        contactAt = e.ts;
+        s.contacts.push({
+          id: e.id,
+          name: String(d.name).trim(),
+          role: d.role ?? "",
+          channels: d.channels ?? [],
+          actor: e.actor,
+          ts: e.ts,
+          main: false,
+        });
         break;
       case "fact":
         s.facts.push({
@@ -261,6 +299,16 @@ export function derive(log: Entry[], now = new Date()): Detail {
       // stay in the log and show only in the Timeline.
     }
   }
+
+  // Who the thread is about, and everyone else saved beside them.
+  s.contacts = s.contacts.filter((c) => !removed.has(c.id));
+  const main = mainContact(s.contacts, String(block?.data.person?.name ?? ""));
+  if (main) {
+    main.main = true;
+    s.contact = { name: main.name, role: main.role };
+    s.channels = main.channels;
+  }
+  const contactAt = s.contacts.at(-1)?.ts ?? start;
 
   // The status word: the conversation first, then the research, then who it found.
   const p = phase as { word: "sent" | "replied" | "closed"; ts: string } | null;
@@ -326,7 +374,7 @@ export function derive(log: Entry[], now = new Date()): Detail {
 
 export function summarize(id: string, log: Entry[], now = new Date()): Summary {
   const d = derive(log, now);
-  const { facts, channels, research, entries, ...summary } = d;
+  const { facts, channels, contacts, research, entries, ...summary } = d;
   return { ...summary, id, company: summary.company || id };
 }
 

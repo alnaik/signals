@@ -86,3 +86,42 @@ test("work starts researching once; the board can't close a thread", () => {
   expect(index.reindex("a.dev")).toMatchObject({ status: "closed", closeReason: "rejected" });
   expect(decide("a.dev", { action: "mark_sent" }).ok).toBe(false);
 });
+
+test("Remove takes back one saved person by their contact entry, and says who the person is now", () => {
+  thread("a.dev");
+  const contact = (actor: string, name: string, email: string) =>
+    append("a.dev", {
+      actor,
+      kind: "contact",
+      data: {
+        name,
+        role: "",
+        confidence: "verified",
+        channels: [{ channel: "email", value: email, confidence: "verified" }],
+      },
+    });
+  const lisa = contact("gather", "Lisa Wang", "lisa@a.dev");
+  const hillary = contact("lookup", "Hillary Bush", "hillary@a.dev");
+  expect(decide("a.dev", { action: "remove_contact", entry: "nope" })).toMatchObject({
+    ok: false,
+    status: 400,
+  });
+  const r = ok(decide("a.dev", { action: "remove_contact", entry: hillary.id }));
+  expect(r.toast).toBe("Removed Hillary Bush");
+  expect(r.entry).toMatchObject({
+    kind: "decision",
+    data: { action: "remove_contact", entry: hillary.id, name: "Hillary Bush" },
+    refs: [hillary.id],
+  });
+  // Already removed: nothing more to take back.
+  expect(decide("a.dev", { action: "remove_contact", entry: hillary.id }).ok).toBe(false);
+  expect(index.reindex("a.dev")?.contact?.name).toBe("Lisa Wang");
+  // The log keeps every line; only what it derives to changes.
+  expect(read("a.dev").filter((e) => e.kind === "contact")).toHaveLength(2);
+
+  const ann = contact("lookup", "Ann Ode", "ann@a.dev");
+  expect(ok(decide("a.dev", { action: "remove_contact", entry: lisa.id })).toast).toBe(
+    "Removed Lisa Wang · Ann Ode is the person now",
+  );
+  expect(index.reindex("a.dev")).toMatchObject({ status: "person found", contact: { name: ann.data.name } });
+});
