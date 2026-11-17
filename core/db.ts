@@ -266,6 +266,17 @@ export const MIGRATIONS: string[] = [
     seen_at TEXT                 -- shown in the panel once finished
   );
   `,
+  `
+  -- Review titles (ats/filters.ts reviewOf): a role in your places that names a job and has none
+  -- of your title words, by its group ("Data Engineer + science", "security engineer"); null
+  -- otherwise. Filled by the rescore SCORE_RULES 6 brings.
+  ALTER TABLE roles ADD COLUMN review TEXT;
+  CREATE INDEX roles_review ON roles(review) WHERE closed_at IS NULL AND fits = 0 AND review IS NOT NULL;
+  -- When an open role started to fit after it was first seen (a title word added, the title rules
+  -- changed, its place read from its page): the Inbox counts it new from then (inbox/query.ts
+  -- cameAt). Null while it fits from the start, and for every role that fit before this.
+  ALTER TABLE roles ADD COLUMN fit_at TEXT;
+  `,
 ];
 
 // The meta keys the one-time repairs set once they ran (intake/repair.ts, sources/hn/index.ts).

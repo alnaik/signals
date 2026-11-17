@@ -112,11 +112,24 @@ export type Progress = (o: ReadOutcome & { done: number; total: number }) => voi
 
 // --- scoring ------------------------------------------------------------------------
 
-const filtersKey = (f: PostingFilters) =>
+// Review titles' Not mine (`title_skip`) changes no score, so no rescore.
+export const filtersKey = ({ title_skip: _, ...f }: PostingFilters) =>
   createHash("sha256")
     .update(`${SCORE_RULES}:${JSON.stringify(f)}`)
     .digest("hex")
     .slice(0, 16);
+
+/**
+ * The SET clause for a role scored again: fits, matched, review, and fit_at stamped `$now` when it
+ * starts to fit (cleared when it stops), so the Inbox shows it as new (inbox/query.ts cameAt). One
+ * filed when its board was first read ("archived", never touched by you: no state_at) becomes new
+ * then too; one you applied to, dismissed or cleared keeps its state. In an UPDATE the columns on
+ * the right are the role's old values. Measured 2026-11-17: of 745 roles SCORE_RULES 6 made fit,
+ * 422 were filed so.
+ */
+export const SET_SCORE = `fit_at = CASE WHEN $fits = 0 THEN NULL WHEN fits = 0 THEN $now ELSE fit_at END,
+  state = CASE WHEN $fits = 1 AND fits = 0 AND state = 'archived' AND state_at IS NULL THEN 'new' ELSE state END,
+  fits = $fits, matched = $matched, review = $review`;
 
 /**
  * Score every open role again when the profile's filters changed since the last scoring: one pass
@@ -131,29 +144,33 @@ export function ensureScored(filters = loadFilters()): number {
   return n;
 }
 
-/** Re-score all open roles against these filters; returns how many changed. */
-export function rescore(filters = loadFilters()): number {
+/**
+ * Re-score all open roles against these filters; returns how many changed. One transaction:
+ * SCORE_RULES 6 changed 771 fits and filled `review` on 29,452 roles (2026-11-17), well under a second.
+ */
+export function rescore(filters = loadFilters(), now = new Date()): number {
   const d = open();
   const rows = d
-    .query("SELECT id, title, location, fits, matched FROM roles WHERE closed_at IS NULL")
+    .query("SELECT id, title, location, fits, matched, review FROM roles WHERE closed_at IS NULL")
     .all() as {
     id: number;
     title: string;
     location: string;
     fits: number;
     matched: string | null;
+    review: string | null;
   }[];
-  const set = d.query("UPDATE roles SET fits = ?, matched = ? WHERE id = ?");
+  const set = d.query(`UPDATE roles SET ${SET_SCORE} WHERE id = $id`);
   let n = 0;
   tx(() => {
     for (const r of rows) {
       const s = score(r, filters);
       const fits = s.fits ? 1 : 0;
-      if (fits === r.fits && s.matched === r.matched) continue;
-      set.run(fits, s.matched, r.id);
+      if (fits === r.fits && s.matched === r.matched && s.review === r.review) continue;
+      set.run({ id: r.id, fits, matched: s.matched, review: s.review, now: now.toISOString() });
       n++;
     }
-    if (n) markChanged();
+    if (n) markChanged(now);
   });
   return n;
 }
@@ -476,16 +493,16 @@ export function applyRead(
     }
     const insert = d.query(
       `INSERT INTO roles (board_id, company_id, ext_id, url, title, location, mode, posted_at, updated_at,
-         first_seen, last_seen, reposted, fits, matched, state)
+         first_seen, last_seen, reposted, fits, matched, review, state)
        VALUES ($board, $company, $ext, $url, $title, $location, $mode, $posted, $updated,
-         $now, $now, $reposted, $fits, $matched, $state) RETURNING id`,
+         $now, $now, $reposted, $fits, $matched, $review, $state) RETURNING id`,
     );
     const touch = d.query(
       "UPDATE roles SET last_seen = $now, misses = 0, closed_at = NULL, ext_id = $ext, url = $url WHERE id = $id",
     );
     const change = d.query(
       `UPDATE roles SET title = $title, location = $location, mode = $mode, posted_at = $posted,
-         updated_at = $updated, fits = $fits, matched = $matched WHERE id = $id`,
+         updated_at = $updated, ${SET_SCORE} WHERE id = $id`,
     );
     const text = d.query(
       "INSERT INTO role_text (role_id, text, fetched_at) VALUES (?, ?, ?) ON CONFLICT(role_id) DO UPDATE SET text = excluded.text, fetched_at = excluded.fetched_at",
@@ -568,6 +585,8 @@ export function applyRead(
             updated: j.updatedAt ?? null,
             fits: s.fits ? 1 : 0,
             matched: s.matched,
+            review: s.review,
+            now: iso,
           });
       } else {
         const before = closedByTitle.get(sameTitle(j.title, j.location));
@@ -586,6 +605,7 @@ export function applyRead(
             reposted: before ? (before.first_seen ?? null) : null,
             fits: s.fits ? 1 : 0,
             matched: s.matched,
+            review: s.review,
             state: news ? "new" : "archived",
           }) as { id: number }
         ).id;
@@ -1122,13 +1142,15 @@ export async function resolvePlaces(now = new Date(), limit = PLACES_PER_TICK): 
     const job = { title: r.title, location: got.places, description: got.text };
     const s = score(job, filters);
     tx(() => {
-      d.query("UPDATE roles SET location = ?, mode = ?, fits = ?, matched = ? WHERE id = ?").run(
-        got.places,
-        workMode(job).mode,
-        s.fits ? 1 : 0,
-        s.matched,
-        r.id,
-      );
+      d.query(`UPDATE roles SET location = $location, mode = $mode, ${SET_SCORE} WHERE id = $id`).run({
+        location: got.places,
+        mode: workMode(job).mode,
+        fits: s.fits ? 1 : 0,
+        matched: s.matched,
+        review: s.review,
+        now: now.toISOString(),
+        id: r.id,
+      });
       if (s.fits && got.text)
         d.query(
           "INSERT INTO role_text (role_id, text, fetched_at) VALUES (?, ?, ?) ON CONFLICT(role_id) DO UPDATE SET text = excluded.text, fetched_at = excluded.fetched_at",

@@ -219,9 +219,9 @@ function placeRole(row: Folded, board: Board, filters = loadFilters()): boolean 
   const s = score(job, filters);
   d.query(
     `INSERT INTO roles (board_id, company_id, ext_id, url, title, location, mode, posted_at, first_seen,
-       last_seen, closed_at, reposted, fits, matched, state, state_at)
+       last_seen, closed_at, reposted, fits, matched, review, state, state_at)
      VALUES ($board, $company, $ext, $url, $title, $location, $mode, $posted, $ts, $ts, $closed, $reposted,
-       $fits, $matched, $state, $at)`,
+       $fits, $matched, $review, $state, $at)`,
   ).run({
     board: board.id,
     company: board.company_id,
@@ -237,6 +237,7 @@ function placeRole(row: Folded, board: Board, filters = loadFilters()): boolean 
     // It was in the Inbox: it fit the filters of the day.
     fits: 1,
     matched: s.matched,
+    review: null,
     state,
     at: state === "new" ? null : (row.outcome_at ?? null),
   });

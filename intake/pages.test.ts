@@ -480,11 +480,11 @@ test("a careers page whose robots.txt names its roles' sitemap is read from it: 
     "User-agent: *\nDisallow: /ajax/\n\nSitemap: https://example.org/jobsearch/sitemap.xml\n";
   const id = upsertCompany({ name: "Example", domain: "example.org" });
   const board = addBoard(id, "careers-page", "https://example.org/jobsearch/", "careers site", now).board!;
-  // A role the model read: no place, no date, its link without the sitemap's trailing slash.
+  // A role the model read: no place (so it fits), no date, its link without the sitemap's trailing slash.
   open()
     .query(
-      `INSERT INTO roles (board_id, company_id, ext_id, url, title, location, first_seen, last_seen, state)
-       VALUES (?, ?, 'https://example.org/jobs/1', 'https://example.org/jobs/1', 'Engineer', '', ?, ?, 'archived')`,
+      `INSERT INTO roles (board_id, company_id, ext_id, url, title, location, first_seen, last_seen, fits, state)
+       VALUES (?, ?, 'https://example.org/jobs/1', 'https://example.org/jobs/1', 'Engineer', '', ?, ?, 1, 'archived')`,
     )
     .run(board.id, id, now.toISOString(), now.toISOString());
   const day = (n: number) => new Date(now.getTime() - n * DAY).toISOString();

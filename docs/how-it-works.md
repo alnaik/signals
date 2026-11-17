@@ -26,7 +26,15 @@ The last section is for people who want to change it.
 
 The **Inbox** shows only the companies with roles that fit your title words and places (or
 remote, if you said remote is fine). There is no score: a role fits or it doesn't, and the Inbox
-says which word and place matched. A role leaves the Inbox 21 days after it was first seen.
+says which word and place matched. Title words match whatever the punctuation, singular or plural,
+and the usual short forms ("Sr. SW Engineer" is a Senior Software Engineer). A role leaves the
+Inbox 21 days after it was first seen, or after it started to fit.
+
+Under the Inbox's switches, one line counts the roles in your places whose title names a job but
+has none of your words, and opens **Review titles**: those titles grouped, biggest first, the ones
+close to a phrase of yours on top ("Data Science Engineer · 13 roles · like your Data Engineer").
+Add puts the phrase in your title words, and its roles come to the Inbox; Not mine stops showing a
+group. Nothing becomes a fit without your press.
 
 Every other company a signal named, one with nothing open that fits you, is on **Signals**, with
 the reason: hiring but nothing fits (a near miss is a role with your title words whose place or

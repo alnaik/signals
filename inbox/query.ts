@@ -21,6 +21,13 @@ export const WEEK_DAYS = 7; // "new" on a watched company's label: first seen th
 export const sinceWatched = (firstSeen: string, watchedAt: string) =>
   `${firstSeen} >= coalesce(${watchedAt}, '')`;
 
+/**
+ * When a role became one for you: first seen, or later, when it started to fit (`fit_at`: a title
+ * word added, the title rules changed, its place read from its page). "New", the 21 days and
+ * sinceWatched count from here, so a role that starts to fit reaches the Inbox like one just posted.
+ */
+export const cameAt = (r = "") => `max(${r}first_seen, coalesce(${r}fit_at, ''))`;
+
 export type InboxSignal = { source: string; tag: string; title: string | null; url: string; at: string };
 export type InboxCompany = {
   id: number;
@@ -158,10 +165,10 @@ const heard = `sig AS (
 /** The companies the Inbox lists, as the CTE `page` (one row each, `n` new roles that fit, `at` newest). */
 const listed = (q: InboxQuery) =>
   `WITH live AS (
-     SELECT r.company_id, count(*) AS n, max(r.first_seen) AS newest
+     SELECT r.company_id, count(*) AS n, max(${cameAt("r.")}) AS newest
      FROM roles r JOIN companies c ON c.id = r.company_id
-     WHERE r.state = 'new' AND r.fits = 1 AND r.closed_at IS NULL AND r.first_seen >= $cutoff
-       AND ${sinceWatched("r.first_seen", "c.watched_at")}
+     WHERE r.state = 'new' AND r.fits = 1 AND r.closed_at IS NULL AND ${cameAt("r.")} >= $cutoff
+       AND ${sinceWatched(cameAt("r."), "c.watched_at")}
        ${q.remote ? "AND r.mode = 'remote'" : ""}
      GROUP BY r.company_id
    ), ${heard}, page AS (
@@ -353,7 +360,7 @@ function describe(rows: (Company & { n: number; at: string; held?: number })[], 
             .query(
               `SELECT r.company_id, count(*) AS n FROM roles r JOIN companies c ON c.id = r.company_id
                WHERE r.company_id IN (${watched.join(",")}) AND r.state = 'new' AND r.fits = 1
-                 AND r.closed_at IS NULL AND r.first_seen >= ? AND ${sinceWatched("r.first_seen", "c.watched_at")}
+                 AND r.closed_at IS NULL AND ${cameAt("r.")} >= ? AND ${sinceWatched(cameAt("r."), "c.watched_at")}
                GROUP BY r.company_id`,
             )
             .all(new Date(now.getTime() - WEEK_DAYS * DAY).toISOString()) as {
@@ -435,8 +442,8 @@ export function companyRoles(
          ${found ? "AND id IN (SELECT value FROM json_each($found))" : ""}
          ${
            view === "inbox" && !found
-             ? `AND state = 'new' AND first_seen >= $cutoff
-                AND ${sinceWatched("first_seen", "(SELECT watched_at FROM companies WHERE id = $company)")}`
+             ? `AND state = 'new' AND ${cameAt()} >= $cutoff
+                AND ${sinceWatched(cameAt(), "(SELECT watched_at FROM companies WHERE id = $company)")}`
              : ""
          }
          ${o.remote ? "AND mode = 'remote'" : ""}

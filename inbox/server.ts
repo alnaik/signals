@@ -3,9 +3,10 @@ import { open } from "../core/db.ts";
 import { failure } from "../core/trace.ts";
 import { getCompany } from "../intake/companies.ts";
 import { discover, waiting } from "../intake/discover.ts";
-import { type ReadOutcome, refreshAll, refreshCompany } from "../intake/refresh.ts";
+import { ensureScored, type ReadOutcome, refreshAll, refreshCompany } from "../intake/refresh.ts";
 import { changed, emit, toast } from "../server/hub.ts";
 import type { ServerFeature } from "../server/types.ts";
+import { saveProfile } from "../setup/state.ts";
 import { plainProblem } from "../watchlist/add.ts";
 import { progress } from "../watchlist/server.ts";
 import { type CompanyAction, chooseCompany, chooseRole, type RoleAction } from "./choose.ts";
@@ -22,6 +23,7 @@ import {
   othersPage,
 } from "./query.ts";
 import { searchHits } from "./search.ts";
+import { reviewCount, reviewTitles, skipTitle, withTitle } from "./titles.ts";
 
 const json = (b: unknown, status = 200) => Response.json(b, { status });
 const num = (s: string) => (/^\d+$/.test(s) ? Number(s) : Number.NaN);
@@ -126,6 +128,37 @@ export const feature: ServerFeature = {
     },
     "/api/others/companies/:cid": {
       GET: (req) => json({ company: otherCompany(num(req.params.cid), flags(req)) }),
+    },
+    // Review titles: the Inbox's line, and the page.
+    "/api/review-titles/count": { GET: () => json(reviewCount()) },
+    "/api/review-titles": {
+      GET: () => json({ groups: reviewTitles({ seen: true }) }),
+      POST: async (req) => {
+        const b = (await req.json().catch(() => ({}))) as { action?: string; key?: string; phrase?: string };
+        const key = String(b.key ?? "").trim();
+        const phrase = String(b.phrase ?? "").trim();
+        if (b.action === "skip" && key) {
+          skipTitle(key);
+          return json({ toast: "Not offered again" });
+        }
+        if (b.action !== "add" || !phrase) return json({ toast: "Nothing to add" }, 400);
+        const list = withTitle(phrase);
+        if (!list) return json({ toast: `“${phrase}” is already one of your title words` }, 409);
+        const fits = () =>
+          (
+            open().query("SELECT count(*) AS n FROM roles WHERE closed_at IS NULL AND fits = 1").get() as {
+              n: number;
+            }
+          ).n;
+        const before = fits();
+        await saveProfile({ filters: { title_include: list } });
+        ensureScored();
+        const n = fits() - before;
+        emit("inbox.changed", {});
+        return json({
+          toast: `Added “${phrase}” to your title words · ${n} more role${n === 1 ? "" : "s"} fit`,
+        });
+      },
     },
     "/api/companies/:cid/roles": {
       GET: (req) => json(companyRoles(num(req.params.cid), flags(req, false))),

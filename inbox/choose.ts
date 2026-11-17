@@ -16,7 +16,7 @@ import {
   threadIdOf,
   watchCompany,
 } from "../intake/companies.ts";
-import { sinceWatched } from "./query.ts";
+import { cameAt, sinceWatched } from "./query.ts";
 
 export type RoleAction = "apply" | "apply_watch" | "dismiss" | "work";
 export type CompanyAction = "watch" | "dismiss" | "apply_email" | "work";
@@ -128,7 +128,7 @@ export function chooseCompany(companyId: number, action: CompanyAction, now = ne
       .query(
         `UPDATE roles SET state = 'archived', state_at = $now
          WHERE company_id = $id AND state = 'new' AND fits = 1 AND closed_at IS NULL
-           AND ${sinceWatched("first_seen", "$watched")}`,
+           AND ${sinceWatched(cameAt(), "$watched")}`,
       )
       .run({ id: c.id, now: now.toISOString(), watched: c.watched_at }).changes;
     return {

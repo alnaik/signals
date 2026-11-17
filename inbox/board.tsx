@@ -7,6 +7,7 @@ import { Copy, EmptyHint, ModeBadge, RoleText } from "../board/ui.tsx";
 import { work, workCompany } from "../decisions/board.tsx";
 import { useAdding } from "../watchlist/board.tsx";
 import type { InboxCompany, RoleView } from "./query.ts";
+import { ReviewLine, ReviewTitles } from "./titles.tsx";
 
 export type Filters = { source: string | null; remote: boolean; metro: string | null; q?: string };
 const qs = (f: Filters, cursor?: string | null) => {
@@ -627,6 +628,8 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
             </button>
           )}
         </div>
+        {/* Only fits reach the Inbox; the titles in your places that might be yours wait here. */}
+        <ReviewLine ctx={ctx} />
         {companies.length === 0 &&
           (filters.q || filters.source || filters.metro || filters.remote ? (
             <div className="empty" style={{ paddingLeft: 0 }}>
@@ -654,7 +657,10 @@ function InboxPage({ ctx }: { ctx: Ctx }) {
 const inbox: BoardFeature = {
   name: "inbox",
   order: 5,
-  pages: { inbox: (ctx) => <InboxPage ctx={ctx} /> },
+  pages: {
+    inbox: (ctx) => <InboxPage ctx={ctx} />,
+    titles: (ctx) => <ReviewTitles ctx={ctx} />,
+  },
 };
 
 export default inbox;

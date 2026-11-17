@@ -1,6 +1,6 @@
 import { open } from "../core/db.ts";
 import * as index from "../core/index-db.ts";
-import { companyRoles, sinceWatched, WEEK_DAYS } from "../inbox/query.ts";
+import { cameAt, companyRoles, sinceWatched, WEEK_DAYS } from "../inbox/query.ts";
 import {
   companyOfThread,
   fundingOf,
@@ -36,8 +36,8 @@ function counts(now = new Date()) {
          (SELECT count(*) FROM roles r WHERE r.company_id = c.id AND r.fits = 1 AND r.closed_at IS NULL) AS fit,
          (SELECT count(*) FROM roles r WHERE r.company_id = c.id AND r.closed_at IS NULL) AS open,
          (SELECT count(*) FROM roles r WHERE r.company_id = c.id AND r.fits = 1 AND r.closed_at IS NULL
-            AND r.state = 'new' AND r.first_seen >= $cutoff
-            AND ${sinceWatched("r.first_seen", "c.watched_at")}) AS fresh,
+            AND r.state = 'new' AND ${cameAt("r.")} >= $cutoff
+            AND ${sinceWatched(cameAt("r."), "c.watched_at")}) AS fresh,
          (SELECT max(last_read_at) FROM boards b WHERE b.company_id = c.id) AS last_read
        FROM companies c WHERE c.watched_at IS NOT NULL`,
     )

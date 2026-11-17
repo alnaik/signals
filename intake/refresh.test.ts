@@ -7,6 +7,7 @@ import { setOnline } from "../core/online.ts";
 import { paths } from "../core/paths.ts";
 import { tempData } from "../core/testing.ts";
 import { failure, failuresFile } from "../core/trace.ts";
+import { inboxCount } from "../inbox/query.ts";
 import { problems } from "../report/report.ts";
 import { getCompany, recordSignal, upsertCompany } from "./companies.ts";
 import { addBoard } from "./discover.ts";
@@ -224,6 +225,60 @@ test("whether a role fits is decided when it's inserted, and again for every ope
     ["b", 1],
     ["c", 0],
   ]);
+});
+
+test("a title in your places with none of your words waits in Review titles; one that starts to fit is new from then", () => {
+  const filters = (f: Record<string, unknown>) =>
+    writeFileSync(
+      paths.me("profile.json"),
+      JSON.stringify({ filters: { locations: ["Denver", "Boulder"], ...f } }),
+    );
+  filters({ title_include: ["Backend Engineer"] });
+  ensureScored();
+  read(1, [
+    job("a", "Backend Engineer", "Denver, CO"),
+    job("b", "Senior Data Platform Engineer", "Denver, CO"),
+    job("c", "Office Assistant", "Denver, CO"),
+    job("d", "Data Platform Engineer", "Lisbon"),
+    job("e", "Data Platform Engineer", "Boulder, CO", { postedAt: "2025-01-02T00:00:00.000Z" }), // filed: old
+  ]);
+  const rows = () =>
+    open().query("SELECT ext_id, fits, review, fit_at, state FROM roles ORDER BY ext_id").all() as {
+      ext_id: string;
+      fits: number;
+      review: string | null;
+      fit_at: string | null;
+      state: string;
+    }[];
+  expect(rows().map((r) => [r.ext_id, r.fits, r.review])).toEqual([
+    ["a", 1, null],
+    ["b", 0, "data platform engineer"],
+    ["c", 0, null], // names no job
+    ["d", 0, null], // not in your places
+    ["e", 0, "data platform engineer"],
+  ]);
+  expect(rows().find((r) => r.ext_id === "e")!.state).toBe("archived");
+  // Not mine changes no score: nothing is scored again.
+  filters({ title_include: ["Backend Engineer"], title_skip: ["data platform engineer"] });
+  expect(ensureScored()).toBe(0);
+  // Added: it fits from now, and is new in the Inbox, though first seen weeks ago.
+  expect(inboxCount()).toBe(0);
+  filters({ title_include: ["Backend Engineer", "Data Platform Engineer"] });
+  expect(ensureScored()).toBe(3); // b and e fit; d, in Lisbon, now has your word (a near miss)
+  const b = rows().find((r) => r.ext_id === "b")!;
+  expect([b.fits, b.review, !!b.fit_at]).toEqual([1, null, true]);
+  // Filed when the board was first read, never touched: new now, as one just posted.
+  expect(rows().find((r) => r.ext_id === "e")).toMatchObject({ fits: 1, state: "new" });
+  expect(rows().find((r) => r.ext_id === "a")!.fit_at).toBeNull(); // fit from the start
+  expect(inboxCount()).toBe(1);
+  // Taken away again: it stops fitting, waits in Review titles, and its fit_at goes.
+  filters({ title_include: ["Backend Engineer"] });
+  ensureScored();
+  expect(rows().find((r) => r.ext_id === "b")).toMatchObject({
+    fits: 0,
+    review: "data platform engineer",
+    fit_at: null,
+  });
 });
 
 test("a role arrives new only when it's news: posted lately, undated on a later read that saw everything since, or named by a signal", () => {
