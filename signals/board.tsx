@@ -113,6 +113,7 @@ function SignalLine({ c }: { c: SignalsCompany }) {
 
 function CompanyRow({
   c,
+  last,
   summary,
   act,
   actCompany,
@@ -120,6 +121,7 @@ function CompanyRow({
   copied,
 }: {
   c: SignalsCompany;
+  last: boolean;
   summary: Summary | null;
   act: (id: number, action: string) => Promise<void>;
   actCompany: (action: string) => void;
@@ -137,7 +139,12 @@ function CompanyRow({
   const showLink = !!link && (c.group === "unread" || link !== site);
   const canPaste = c.group === "unread" || (c.group === "posted" && c.board?.status !== "ok");
   return (
-    <div style={{ borderBottom: "1px solid var(--line)" }}>
+    <div style={{ borderBottom: "1px solid var(--line)", position: "relative" }}>
+      {last && (
+        <span className="last-here" title="You were last here" aria-hidden="true">
+          →
+        </span>
+      )}
       <div
         className="row"
         style={{
@@ -371,6 +378,7 @@ function List({
         <CompanyRow
           key={c.id}
           c={c}
+          last={c.id === list.last}
           summary={summary}
           act={(roleId, action) => act(c.id, roleId, action)}
           actCompany={(action) => actCompany(c.id, action)}

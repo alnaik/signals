@@ -219,6 +219,7 @@ function boardWord(c: InboxCompany): string | null {
 /** A company is the row; its roles open behind a click. */
 function CompanyRow({
   c,
+  last,
   filters,
   line,
   act,
@@ -226,6 +227,7 @@ function CompanyRow({
   copied,
 }: {
   c: InboxCompany;
+  last?: boolean; // the company you last acted on: an arrow in the margin, so you find your place
   filters: Filters;
   line?: string;
   act: (id: number, action: string) => void;
@@ -238,7 +240,12 @@ function CompanyRow({
   // company with nothing new, the roles that fit it.
   const opens = (c.held ?? (c.roles || c.fit)) > 0 || (c.hitRoles ?? 0) > 0;
   return (
-    <div style={{ borderBottom: "1px solid var(--line)" }}>
+    <div style={{ borderBottom: "1px solid var(--line)", position: "relative" }}>
+      {last && (
+        <span className="last-here" title="You were last here" aria-hidden="true">
+          →
+        </span>
+      )}
       <div
         className="row"
         style={{ gridTemplateColumns: "minmax(0,1fr) auto", borderBottom: 0 }}
@@ -422,13 +429,15 @@ export function useCompanies<T extends { id: number } = InboxCompany>(path: stri
     return () => window.removeEventListener("inbox.changed", changed);
   }, [load, refresh]);
   // After a choice only that company is fetched again: it changes in place, or leaves.
+  const [last, setLast] = useState<number | null>(null);
   const reloadCompany = async (id: number) => {
+    setLast(id);
     const r = await fetch(`${path}/companies/${id}?${qs(filters)}`);
     const c = r.ok ? ((await r.json()).company as T | null) : null;
     setCompanies((prev) => (prev ?? []).flatMap((x) => (x.id !== id ? [x] : c ? [c] : [])));
     if (!c && companies?.some((x) => x.id === id)) setCount((n) => n - 1);
   };
-  return { companies, next, count, sources, metros, load, reloadCompany, arrived };
+  return { companies, next, count, sources, metros, load, reloadCompany, arrived, last };
 }
 
 type Page<T = InboxCompany> = {
@@ -570,6 +579,7 @@ function InboxPage({ ctx, params }: { ctx: Ctx; params: Record<string, string> }
         <CompanyRow
           key={c.id}
           c={c}
+          last={c.id === list.last}
           filters={f}
           line={adding[String(c.id)]}
           act={(roleId, action) => act(list, c.id, roleId, action)}
