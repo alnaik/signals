@@ -5,8 +5,8 @@
 // And, when the profile's locations name a state: each new D's primary_doc.xml says where the
 // issuer's principal office is; issuers in those states that sold at least `min_sold` (and aren't
 // funds, real estate, banks or oil and gas) are a dated list of local companies that just raised.
-// One that resolves to a domain becomes a signal ("funding") naming the company, which then has
-// its board looked for; one that doesn't stays here, in sources/form-d.json. Related persons are never read or stored.
+// Each becomes a signal ("funding") naming the company, by its domain when the name is one you
+// know, else by name for discovery to find its site; then its board is looked for. Related persons are never read or stored.
 
 import { readFileSync } from "node:fs";
 import { loadFilters, profileStates } from "../../ats/filters.ts";
@@ -212,19 +212,20 @@ const formD: Source = {
         delete partial[ymd];
       } else partial[ymd] = [...read];
     }
-    // Name → domain: rules only (a name you already know); a miss is asked again the next night.
+    // Name → domain: rules only (a name you already know). A name you don't know goes as a name:
+    // discovery looks for its site and takes one only with proof (intake/domain.ts), as for any
+    // signal that names a company without its site.
     const leads: Lead[] = [];
     for (const i of Object.values(issuers)) {
-      if (!i.domain) i.domain = await resolveCompany(i.name);
-      if (!i.domain) continue;
+      if (!i.domain && !i.shown) i.domain = await resolveCompany(i.name);
       const f: Funding = { form: "D", date: i.date, url: i.url, cik: i.cik };
-      const known = companyByDomain(i.domain);
+      const known = i.domain ? companyByDomain(i.domain) : null;
       if (known) keep(known.id, f);
       if (i.shown) continue;
       i.shown = true;
       leads.push({
         url: i.url,
-        domain: i.domain,
+        ...(i.domain ? { domain: i.domain } : {}),
         company_hint: i.name,
         kind: "company",
         funding: f, // kept on the company the signal makes
