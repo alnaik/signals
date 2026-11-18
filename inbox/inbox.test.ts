@@ -496,3 +496,45 @@ test("nothing writes role_text with REPLACE: its delete fires no trigger, and th
         if (!/^\s*(--|\/\/|\*)/.test(line) && /REPLACE\s+INTO\s+role_text/i.test(line)) bad.push(f);
   expect(bad).toEqual([]);
 });
+
+test("Review titles: an opened group lists its roles, newest first; one role's own Add takes its exact title, and it leaves", async () => {
+  writeFileSync(paths.me("profile.json"), JSON.stringify({ filters: { title_include: ["AI Engineer"] } }));
+  const brightwell = withRoles(
+    "Brightwell",
+    "brightwell.dev",
+    [job("b1", "AI Security Research & Red Team Engineer", "Remote - US")],
+    ago(1),
+  );
+  withRoles(
+    "Quillon",
+    "quillon.dev",
+    [job("q1", "Senior Recruiter, AI & Engineering", "Austin, TX")],
+    ago(3),
+  );
+  const gone = withRoles("Gone", "gone.dev", [job("g1", "Engineer, Applied AI")], ago(2));
+  dismissCompany(gone, now);
+  const key = "AI Engineer (any order)";
+  const { groupRoles } = await import("./titles.ts");
+  const got = groupRoles(key);
+  expect(got.total).toBe(2);
+  expect(got.roles.map((r) => [r.title, r.company, r.place, r.mode])).toEqual([
+    ["AI Security Research & Red Team Engineer", "Brightwell", "US", "remote"],
+    ["Senior Recruiter, AI & Engineering", "Quillon", "Austin, TX", "unknown"],
+  ]);
+  const { feature } = await import("./server.ts");
+  const route = feature.routes!["/api/review-titles"] as { POST: (req: Request) => Promise<Response> };
+  const add = (phrase: string) =>
+    route.POST(
+      new Request("http://x/api/review-titles", {
+        method: "POST",
+        body: JSON.stringify({ action: "add", key, phrase }),
+      }),
+    );
+  expect(
+    ((await (await add("AI Security Research & Red Team Engineer")).json()) as { toast: string }).toast,
+  ).toBe("Added “AI Security Research & Red Team Engineer” to your title words · 1 more role fit");
+  expect(groupRoles(key).roles.map((r) => r.title)).toEqual(["Senior Recruiter, AI & Engineering"]);
+  expect(companyRoles(brightwell, { view: "fit" }, now).roles.map((r) => r.title)).toEqual([
+    "AI Security Research & Red Team Engineer",
+  ]);
+});

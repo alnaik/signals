@@ -4,10 +4,11 @@
 // stops offering the group (filters.title_skip), and changes no score. Nothing becomes a fit
 // without your press.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { loadFilters, reviewTitle } from "../ats/filters.ts";
+import { loadFilters, reviewTitle, workMode } from "../ats/filters.ts";
 import { getMeta, open, setMeta } from "../core/db.ts";
 import { paths } from "../core/paths.ts";
 import { ensureScored } from "../intake/refresh.ts";
+import { shortPlace } from "./query.ts";
 
 export type TitleGroup = {
   key: string; // the group, as kept on its roles: "Data Engineer + science", "security engineer"
@@ -23,6 +24,18 @@ export type TitleGroup = {
 // consultant, director …) is the third, shown folded.
 const BUILD = /(^| )(engineer\w*|developer|programmer|scientist|architect|research\w*|technical staff)$/;
 const SAMPLES = 3;
+const LISTED = 200; // a group's roles listed when it is opened
+
+/** One role in an opened group: its own Add puts its exact title in your title words. */
+export type TitleRole = {
+  id: number;
+  title: string;
+  company: string;
+  location: string; // in full: the place's tooltip
+  place: string; // short (shortPlace)
+  mode: string;
+  url: string;
+};
 
 /** The roles Review titles counts: open, not fitting, a group not skipped, at a company not dismissed, not decided. */
 const pool = `FROM roles r JOIN companies c ON c.id = r.company_id
@@ -102,6 +115,31 @@ export function reviewTitles(o: { seen?: boolean } = {}, now = new Date()): Titl
     });
   }
   return out.sort((a, b) => a.tier - b.tier || b.roles - a.roles || a.phrase.localeCompare(b.phrase));
+}
+
+/**
+ * A group's roles, newest first, the first 200 of `total`: what opening it on the page lists. The
+ * roles reviewTitles counts, so one that fits after an Add leaves.
+ */
+export function groupRoles(key: string): { roles: TitleRole[]; total: number } {
+  ensureScored();
+  const d = open();
+  const at = { ...skipped(), key };
+  const rows = d
+    .query(
+      `SELECT r.id, r.title, c.name AS company, r.location, r.mode, r.url ${pool} AND r.review = $key
+       ORDER BY r.first_seen DESC, r.id DESC LIMIT ${LISTED}`,
+    )
+    .all(at) as Omit<TitleRole, "place">[];
+  const { n } = d.query(`SELECT count(*) AS n ${pool} AND r.review = $key`).get(at) as { n: number };
+  const yours = loadFilters();
+  return {
+    roles: rows.map((r) => ({
+      ...r,
+      place: shortPlace(workMode({ title: r.title, location: r.location }).place, yours),
+    })),
+    total: n,
+  };
 }
 
 /** The profile's filters as written (not loadFilters': its `remote_ok` stays as the file has it). */

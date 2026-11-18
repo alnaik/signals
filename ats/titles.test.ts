@@ -146,3 +146,18 @@ test("review: a three-word phrase with more than two words between in all falls 
     "Machine Learning Engineer + vision",
   );
 });
+
+test("a role's exact title, punctuation and all, added as a title word: that title fits, and none throws", () => {
+  const titles = [
+    "AI Security Research & Red Team Engineer",
+    "Python Engineer @ Outlier AI [$90,000 - 130,000]",
+    "Staff Engineer (Payments / Ledger) – Remote",
+    "Ingénieur·e C++/C# Engineer — Moteur 3D",
+  ];
+  const g: PostingFilters = { title_include: ["AI Engineer", ...titles] };
+  for (const t of titles) expect(score({ title: t }, g)).toMatchObject({ fits: true, matched: t });
+  // Its words where the title breaks them ("&", ",") still match; others' don't.
+  expect(score({ title: "AI Security Research Red Team Engineer" }, g).fits).toBe(true);
+  expect(score({ title: "AI Security Research, Red Team Engineer" }, g).fits).toBe(false);
+  expect(score({ title: "Senior Recruiter, AI & Engineering" }, g).fits).toBe(false);
+});

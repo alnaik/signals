@@ -25,7 +25,7 @@ import {
 } from "./query.ts";
 import { reading, readOffer, startRead, stopRead } from "./read.ts";
 import { search } from "./search.ts";
-import { reviewCount, reviewTitles, skipTitle, withTitle } from "./titles.ts";
+import { groupRoles, reviewCount, reviewTitles, skipTitle, withTitle } from "./titles.ts";
 
 const json = (b: unknown, status = 200) => Response.json(b, { status });
 const num = (s: string) => (/^\d+$/.test(s) ? Number(s) : Number.NaN);
@@ -181,6 +181,10 @@ export const feature: ServerFeature = {
     },
     // Review titles: the Inbox's line, and the page.
     "/api/review-titles/count": { GET: () => json(reviewCount()) },
+    // A group's roles, when it is opened.
+    "/api/review-titles/roles": {
+      GET: (req) => json(groupRoles(new URL(req.url).searchParams.get("key") ?? "")),
+    },
     "/api/review-titles": {
       GET: () => json({ groups: reviewTitles({ seen: true }) }),
       POST: async (req) => {

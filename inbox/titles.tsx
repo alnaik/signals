@@ -1,9 +1,10 @@
 // Review titles: the Inbox's line, and the page it opens (#/titles).
 import { useCallback, useEffect, useState } from "react";
+import { roleHref } from "../board/format.ts";
 import { SectionHead } from "../board/Queue.tsx";
 import type { Ctx } from "../board/slots.ts";
-import { Tag } from "../board/ui.tsx";
-import type { TitleGroup } from "./titles.ts";
+import { ModeBadge, Tag } from "../board/ui.tsx";
+import type { TitleGroup, TitleRole } from "./titles.ts";
 
 const n = (x: number) => x.toLocaleString("en-US");
 const plural = (x: number, one: string, many = `${one}s`) => `${n(x)} ${x === 1 ? one : many}`;
@@ -33,57 +34,129 @@ export function ReviewLine({ ctx }: { ctx: Ctx }) {
   );
 }
 
-function Group({ g, act }: { g: TitleGroup; act: (g: TitleGroup, action: "add" | "skip") => void }) {
-  return (
-    <div className="row quiet" style={{ gridTemplateColumns: "minmax(0,1fr) auto" }}>
-      <div className="l1" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
-        <span style={{ fontSize: 15, fontWeight: 500 }}>
-          {g.phrase || `${g.like}, its words in another order`}
-        </span>
-        <span className="muted">{plural(g.roles, "role")}</span>
-        {g.like && g.phrase && <span className="muted">like your {g.like}</span>}
-        {g.fresh && <Tag>new</Tag>}
-        <span className="faint">{g.titles.join(" · ")}</span>
+type Act = (g: TitleGroup, action: "add" | "skip", phrase?: string) => void;
+
+/** An opened group's roles, newest first; `tick` reloads them (an Add took some out). */
+function GroupRoles({ g, tick, act }: { g: TitleGroup; tick: number; act: Act }) {
+  const [got, setGot] = useState<{ roles: TitleRole[]; total: number } | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tick is the trigger
+  useEffect(() => {
+    fetch(`/api/review-titles/roles?key=${encodeURIComponent(g.key)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setGot)
+      .catch(() => {});
+  }, [g.key, tick]);
+  if (!got)
+    return (
+      <div className="faint" style={{ padding: "6px 0 8px 16px" }}>
+        reading…
       </div>
-      <div className="actions">
-        {g.phrase && (
+    );
+  return (
+    <div style={{ paddingLeft: 16, paddingBottom: 8 }}>
+      {got.roles.map((r) => (
+        <div
+          key={r.id}
+          className="row quiet"
+          style={{
+            gridTemplateColumns: "minmax(0,1fr) auto",
+            borderTop: "1px solid var(--line)",
+            borderBottom: 0,
+            cursor: "default",
+          }}
+        >
+          <div className="l1" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
+            <a
+              href={roleHref(r.url)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 15, fontWeight: 500 }}
+            >
+              {r.title}
+            </a>
+            <span className="muted">{r.company}</span>
+            <span className="muted" title={r.location || undefined}>
+              {r.place || (r.mode && r.mode !== "unknown" ? "" : r.location || "location unknown")}
+            </span>
+            <ModeBadge mode={r.mode} />
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="small"
+              title={`Adds “${r.title}” to your title words: this role, and any role with this title, fits from now`}
+              onClick={() => act(g, "add", r.title)}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      ))}
+      {got.total > got.roles.length && (
+        <div className="faint" style={{ padding: "6px 0" }}>
+          {n(got.roles.length)} of {n(got.total)} shown
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A group is the row; its roles open behind a click, as a company's do in the Inbox. */
+function Group({ g, tick, act }: { g: TitleGroup; tick: number; act: Act }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderBottom: "1px solid var(--line)" }}>
+      <div
+        className="row quiet"
+        style={{ gridTemplateColumns: "minmax(0,1fr) auto", borderBottom: 0 }}
+        onClick={() => setOpen(!open)}
+      >
+        <div className="l1" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
+          <span style={{ fontSize: 15, fontWeight: 500 }}>
+            {g.phrase || `${g.like}, its words in another order`}
+          </span>
+          <span className="muted">
+            {plural(g.roles, "role")} {open ? "▾" : "▸"}
+          </span>
+          {g.like && g.phrase && <span className="muted">like your {g.like}</span>}
+          {g.fresh && <Tag>new</Tag>}
+          <span className="faint">{g.titles.join(" · ")}</span>
+        </div>
+        <div className="actions" onClick={(e) => e.stopPropagation()}>
+          {g.phrase && (
+            <button
+              type="button"
+              className="small primary"
+              title={`Adds “${g.phrase}” to your title words`}
+              onClick={() => act(g, "add")}
+            >
+              Add
+            </button>
+          )}
           <button
             type="button"
-            className="small primary"
-            title={`Adds “${g.phrase}” to your title words`}
-            onClick={() => act(g, "add")}
+            className="small"
+            title="Stops showing this group"
+            onClick={() => act(g, "skip")}
           >
-            Add
+            Not mine
           </button>
-        )}
-        <button
-          type="button"
-          className="small"
-          title="Stops showing this group"
-          onClick={() => act(g, "skip")}
-        >
-          Not mine
-        </button>
+        </div>
       </div>
+      {open && <GroupRoles g={g} tick={tick} act={act} />}
     </div>
   );
 }
 
 /** A tier's groups: those of three roles or more, the rest behind "show all". */
-function Tier({
-  groups,
-  act,
-}: {
-  groups: TitleGroup[];
-  act: (g: TitleGroup, action: "add" | "skip") => void;
-}) {
+function Tier({ groups, tick, act }: { groups: TitleGroup[]; tick: number; act: Act }) {
   const [more, setMore] = useState(false);
   const big = groups.filter((g) => g.roles >= 3);
   const shown = more || big.length === 0 ? groups : big;
   return (
     <>
       {shown.map((g) => (
-        <Group key={g.key} g={g} act={act} />
+        <Group key={g.key} g={g} tick={tick} act={act} />
       ))}
       {shown.length < groups.length && (
         <button type="button" className="small link" onClick={() => setMore(true)}>
@@ -97,6 +170,7 @@ function Tier({
 export function ReviewTitles({ ctx }: { ctx: Ctx }) {
   const [groups, setGroups] = useState<TitleGroup[] | null>(null);
   const [others, setOthers] = useState(false);
+  const [tick, setTick] = useState(0); // an Add: open groups read their roles again
   const load = useCallback(async () => {
     const r = await fetch("/api/review-titles");
     if (r.ok) setGroups((await r.json()).groups);
@@ -104,14 +178,16 @@ export function ReviewTitles({ ctx }: { ctx: Ctx }) {
   useEffect(() => {
     load();
   }, [load]);
-  const act = async (g: TitleGroup, action: "add" | "skip") => {
+  // `phrase`: one role's exact title, its own Add; else the group's phrase.
+  const act: Act = async (g, action, phrase = g.phrase) => {
     // Not mine leaves at once; Add when its roles are scored again.
     if (action === "skip") setGroups((gs) => (gs ?? []).filter((x) => x.key !== g.key));
-    const res = await ctx.post("/api/review-titles", { action, key: g.key, phrase: g.phrase });
+    const res = await ctx.post("/api/review-titles", { action, key: g.key, phrase });
     const out = await res.json().catch(() => ({ toast: "Something went wrong" }));
     ctx.toast(out.toast);
     if (action === "add") {
       await load();
+      setTick((t) => t + 1);
       await ctx.refetch();
     }
   };
@@ -139,7 +215,7 @@ export function ReviewTitles({ ctx }: { ctx: Ctx }) {
             <div className="label" style={{ margin: "14px 0 4px" }}>
               Close to your words · {plural(tier(1).length, "group")}
             </div>
-            <Tier groups={tier(1)} act={act} />
+            <Tier groups={tier(1)} tick={tick} act={act} />
           </>
         )}
         {tier(2).length > 0 && (
@@ -147,7 +223,7 @@ export function ReviewTitles({ ctx }: { ctx: Ctx }) {
             <div className="label" style={{ margin: "14px 0 4px" }}>
               Other jobs that build · {plural(tier(2).length, "group")}
             </div>
-            <Tier groups={tier(2)} act={act} />
+            <Tier groups={tier(2)} tick={tick} act={act} />
           </>
         )}
         {third.length > 0 && (
@@ -167,7 +243,7 @@ export function ReviewTitles({ ctx }: { ctx: Ctx }) {
               </span>
               <span>{others ? "▾" : "▸"}</span>
             </button>
-            {others && <Tier groups={third} act={act} />}
+            {others && <Tier groups={third} tick={tick} act={act} />}
           </div>
         )}
       </section>
