@@ -16,6 +16,7 @@ import {
   assembleFollowup,
   blocker,
   type Context,
+  clip,
   countLinks,
   type DraftAnswer,
   type DraftData,
@@ -26,6 +27,7 @@ import {
   NO_EVIDENCE,
   NO_PERSON,
   NO_TARGET,
+  quoteCheck,
   toLine,
 } from "./shape.ts";
 import { press } from "./write.ts";
@@ -449,4 +451,86 @@ test("threads holding the old four-part talking points still display", () => {
   expect(derive(log).research?.problem.text).toBe("Recruiters don't trust the agents' reasons");
   expect(describeEntry(log.at(-1)!)).toBe("talking points");
   expect(draftState(log).last).toBeNull();
+});
+
+test("a quote handed to the model is never cut mid-word", () => {
+  const quote =
+    "We are hiring. You will help shape how developers and agents build with Tessera. Remote is fine.";
+  expect(clip(quote, 200)).toBe(quote);
+  // The last whole sentence that fits.
+  expect(clip(quote, 60)).toBe("We are hiring.");
+  expect(clip(quote, 84)).toBe(
+    "We are hiring. You will help shape how developers and agents build with Tessera.",
+  );
+  // No sentence ends in reach: the last whole word, marked as cut.
+  const run = "help shape how developers and agents build with Tessera every day";
+  expect(clip(run, 38)).toBe("help shape how developers and agents …");
+  expect(clip(run, 37)).toBe("help shape how developers and agents …");
+  expect(clip(run, 35)).toBe("help shape how developers and …");
+});
+
+test("quoted words must be a fact's own words, whole; a sentence that isn't goes under the draft", () => {
+  const full = "Trust in the reasons our agents give is the hard part.";
+  expect(quoteCheck('your post says "trust in the reasons our agents give"', [full])).toBeNull();
+  expect(quoteCheck("your post says “the hard part”", [full])).toBeNull();
+  expect(quoteCheck('your post says "Trust in the reasons our agents g"', [full])).not.toBeNull();
+  expect(quoteCheck('your post says "rust in the reasons"', [full])).not.toBeNull();
+  expect(quoteCheck('your post says "trust in reasons"', [full])).not.toBeNull();
+  expect(quoteCheck("no quotation marks here", [])).toBeNull();
+  const id = thread();
+  const cut = assemble(
+    {
+      ...EXAMPLE,
+      problem: { text: 'Your post says "trust in the reasons our agents g" matters', facts: [1] },
+    },
+    ctx(id, true),
+  )!;
+  expect(cut.sentences.map((s) => s.part)).toEqual(["made", "done_before", "ask"]);
+  expect(cut.missing).toEqual([
+    "missing: their problem (its quoted words aren't word for word in a fact it rests on)",
+  ]);
+  expect(messageText(cut)).not.toContain("agents g");
+  const whole = assemble(
+    {
+      ...EXAMPLE,
+      problem: { text: 'Your post says "trust in the reasons our agents give" is the hard part', facts: [1] },
+    },
+    ctx(id, true),
+  )!;
+  expect(whole.missing).toEqual([]);
+  // Quoting words with no fact under the sentence: nothing to quote from.
+  const made = assemble({ ...EXAMPLE, made: { text: 'I built a "claim checker"' } }, ctx(id, true))!;
+  expect(made.missing[0]).toStartWith("missing: made (its quoted words");
+});
+
+test("the model reads a long quote cut at a whole sentence, never mid-word", async () => {
+  const id = thread();
+  append(id, {
+    actor: "gather",
+    kind: "fact",
+    data: { group: "hiring", text: "Posting: Software Engineer - AI Tooling" },
+    source: {
+      type: "page",
+      url: `https://${id}/jobs/2`,
+      quote: `${"We build tools for teams. ".repeat(14)}You will help shape how developers and agents build with Fabrikam.`,
+    },
+  });
+  decide(id, { action: "proof_built", url: "https://example.com/claim" });
+  let user = "";
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    user = JSON.parse(String(init.body)).messages[0].content;
+    return Response.json({
+      id: "m",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-5-5",
+      stop_reason: "end_turn",
+      content: [{ type: "text", text: JSON.stringify(EXAMPLE) }],
+      usage: { input_tokens: 10, output_tokens: 10 },
+    });
+  }) as unknown as typeof fetch;
+  await press(id, {});
+  const line = user.split("\n").find((l) => l.startsWith("2. "))!;
+  expect(line).toContain('We build tools for teams."');
+  expect(line).not.toContain("You will help");
 });

@@ -66,6 +66,47 @@ export function bannedIn(text: string): string | null {
   return BANNED.find((b) => new RegExp(`\\b${b.toLowerCase()}\\b`).test(t)) ?? null;
 }
 
+/**
+ * A text cut to fit, never mid-word: at the last whole sentence that fits, else the last whole
+ * word, marked "…". What the model reads it may quote, so it never sees half a word.
+ */
+export function clip(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  const head = t.slice(0, max + 1); // one more: a sentence or word that ends exactly at max is whole
+  const ends = [...head.matchAll(/[.!?][)"'”’\]]*(?=\s)/g)];
+  const end = ends.at(-1);
+  if (end?.index !== undefined && end.index + end[0].length <= max)
+    return t.slice(0, end.index + end[0].length);
+  const space = head.lastIndexOf(" ", max);
+  return space > 0 ? `${t.slice(0, space).replace(/[\s,;:–—-]+$/, "")} …` : "";
+}
+
+const plain = (s: string) =>
+  s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
+const wordChar = (ch: string | undefined) => !!ch && /[\p{L}\p{N}]/u.test(ch);
+
+/**
+ * Words a sentence puts in quotation marks must be in the full quote of a fact it rests on, word
+ * for word, starting and ending on whole words of it. Null when they are (or there are none).
+ */
+export function quoteCheck(text: string, quotes: string[]): string | null {
+  const spans = [...text.matchAll(/["“]([^"“”]+)["”]/g)].map((m) =>
+    plain(m[1]!).replace(/^[\s.,;:…]+|[\s.,;:…]+$/g, ""),
+  );
+  const sources = quotes.map(plain).filter(Boolean);
+  for (const span of spans) {
+    if (!span) continue;
+    const whole = sources.some((q) => {
+      for (let i = q.indexOf(span); i !== -1; i = q.indexOf(span, i + 1))
+        if (!wordChar(q[i - 1]) && !wordChar(q[i + span.length])) return true;
+      return false;
+    });
+    if (!whole) return "its quoted words aren't word for word in a fact it rests on";
+  }
+  return null;
+}
+
 const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** An item that existed before is never worded as made for this company. */
 export function madeForThem(text: string, company: string): boolean {
@@ -197,8 +238,11 @@ export function assemble(a: DraftAnswer, c: Context): DraftData | null {
     facts: [],
     evidence: c.made.built ? [] : [{ claim: c.made.claim, url: c.made.url }],
   };
+  // The full quotes of the facts a sentence rests on: what its quoted words must be.
+  const quotesOf = (ns: number[]) => ns.map((n) => byN.get(n)?.source?.quote ?? "");
   const madeCheck =
     common(madeText) ??
+    quoteCheck(madeText, []) ??
     (!c.made.built && madeForThem(madeText, c.company)
       ? `your item is worded as if made for ${c.company}`
       : null);
@@ -215,7 +259,8 @@ export function assemble(a: DraftAnswer, c: Context): DraftData | null {
     common(clean(a.problem.text)) ??
     (!probFacts.length || probFacts.some((n) => byN.get(n)!.failed)
       ? `no fact about ${c.company} backs it`
-      : null);
+      : null) ??
+    quoteCheck(a.problem.text, quotesOf(probFacts));
 
   const done: Sentence = {
     part: "done_before",
@@ -225,6 +270,7 @@ export function assemble(a: DraftAnswer, c: Context): DraftData | null {
   };
   const doneCheck =
     common(doneText) ??
+    quoteCheck(doneText, []) ??
     (madeForThem(doneText, c.company) ? `your item is worded as if made for ${c.company}` : null);
 
   const ask: Sentence = { part: "ask", text: ASKS[a.ask] ?? ASKS.call, facts: [], evidence: [] };
@@ -302,7 +348,10 @@ export function assembleFollowup(
           ? "it had a link of its own"
           : !facts.length && !made
             ? "nothing new backs it"
-            : null;
+            : quoteCheck(
+                text,
+                facts.map((n) => fresh.get(n)!.source?.quote ?? ""),
+              );
     if (!why && made && !linked) {
       text = `${text.replace(/[.\s:,-]+$/, "")}: ${bare(c.madeSince!)}.`;
       linked = true;

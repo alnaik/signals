@@ -15,6 +15,7 @@ import {
   assemble,
   assembleFollowup,
   blocker,
+  clip,
   type DraftAnswer,
   type DraftData,
   draftState,
@@ -41,7 +42,7 @@ export function evidenceList(): Evidence[] {
         const e = JSON.parse(l) as { claim?: unknown; url?: unknown };
         const claim = String(e.claim ?? "").trim();
         const url = String(e.url ?? "").trim();
-        return claim ? [{ claim: claim.slice(0, 400), url: /^https?:\/\//i.test(url) ? url : "" }] : [];
+        return claim ? [{ claim: clip(claim, 400), url: /^https?:\/\//i.test(url) ? url : "" }] : [];
       } catch {
         return [];
       }
@@ -57,7 +58,7 @@ const factLines = (facts: Fact[]) =>
     .filter((f) => !f.failed)
     .map(
       (f) =>
-        `${f.n}. [${f.group}] ${f.text} — "${(f.source?.quote ?? "").slice(0, 400)}" (${f.source?.url ?? ""})`,
+        `${f.n}. [${f.group}] ${f.text} — "${clip(f.source?.quote ?? "", 400)}" (${f.source?.url ?? ""})`,
     )
     .join("\n") || "(none)";
 const evidenceLines = (ev: Evidence[]) =>
