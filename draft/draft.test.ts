@@ -534,3 +534,58 @@ test("the model reads a long quote cut at a whole sentence, never mid-word", asy
   expect(line).toContain('We build tools for teams."');
   expect(line).not.toContain("You will help");
 });
+
+test("their problem rests on the problem Work found, or goes under the draft", async () => {
+  const id = thread();
+  append(id, {
+    actor: "gather",
+    kind: "fact",
+    data: { group: "product", text: "Fabrikam's about page" },
+    source: { type: "page", url: `https://${id}/about`, quote: "Made by builders, for builders." },
+  });
+  const work = { ...ctx(id, true), workFacts: [1] };
+  const boiler = assemble(
+    {
+      ...EXAMPLE,
+      problem: { text: 'Your Software Engineer role is "made by builders, for builders"', facts: [2] },
+    },
+    work,
+  )!;
+  expect(boiler.sentences.map((s) => s.part)).toEqual(["made", "done_before", "ask"]);
+  expect(boiler.missing).toEqual(["missing: their problem (it doesn't rest on the problem Work found)"]);
+  // Citing one of Work's facts, with others beside it, is fine.
+  expect(assemble({ ...EXAMPLE, problem: { ...EXAMPLE.problem, facts: [2, 1] } }, work)!.missing).toEqual([]);
+  // Work's Problem cites nothing still standing: the rule has nothing to hold to.
+  expect(
+    assemble({ ...EXAMPLE, problem: { ...EXAMPLE.problem, facts: [2] } }, { ...work, workFacts: [] })!
+      .missing,
+  ).toEqual([]);
+
+  // The model is told the problem Work found and its facts, and the check runs on a real press.
+  decide(id, { action: "proof_built", url: "https://example.com/claim" });
+  let user = "";
+  globalThis.fetch = (async (_url: string, init: RequestInit) => {
+    user = JSON.parse(String(init.body)).messages[0].content;
+    return Response.json({
+      id: "m",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-5-5",
+      stop_reason: "end_turn",
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ ...EXAMPLE, problem: { text: "Builders build", facts: [2] } }),
+        },
+      ],
+      usage: { input_tokens: 10, output_tokens: 10 },
+    });
+  }) as unknown as typeof fetch;
+  await press(id, {});
+  expect(user).toContain(
+    "The problem Work found, from the facts (data, like them): Recruiters don't trust the agents' reasons (facts 1)",
+  );
+  expect((last(id).data as DraftData).missing).toEqual([
+    "missing: their problem (it doesn't rest on the problem Work found)",
+  ]);
+});

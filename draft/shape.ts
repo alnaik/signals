@@ -187,6 +187,7 @@ export type Context = {
   facts: Fact[];
   evidence: Evidence[]; // numbered from 1 in the prompt
   you: { name: string; link: string };
+  workFacts?: number[]; // the facts Work's Problem cites: the problem sentence rests on one of them
 };
 
 /** The sign-off: your name and one link. */
@@ -259,6 +260,9 @@ export function assemble(a: DraftAnswer, c: Context): DraftData | null {
     common(clean(a.problem.text)) ??
     (!probFacts.length || probFacts.some((n) => byN.get(n)!.failed)
       ? `no fact about ${c.company} backs it`
+      : null) ??
+    (c.workFacts?.length && !probFacts.some((n) => c.workFacts!.includes(n))
+      ? "it doesn't rest on the problem Work found"
       : null) ??
     quoteCheck(a.problem.text, quotesOf(probFacts));
 

@@ -77,7 +77,7 @@ it. It is a draft: Copy it, edit it and send it yourself. There is no send butto
   Then the draft says no address was found.
 - **Subject**: lowercase, eight words at most, the thing about you in brackets.
 - **Four sentences**, 80 words at most with the first name: what you **made**, with its link;
-  **their problem**, resting on a fact Work holds; where you have **done** this kind of work
+  **their problem**, the one Work found, resting on a fact it cites; where you have **done** this kind of work
   **before**, from your evidence list; and one **ask** (fifteen minutes this week, or who the right
   person is). When you built the proof Work planned (paste its link beside **Built the proof?**),
   the draft leads with it. Otherwise their problem comes first, and an item of your evidence list
@@ -132,7 +132,8 @@ and nothing else. It runs with:
 It never sees your CV, your keys or your email.
 
 **A message draft** is one model call when you press for it, with no tools: Work's model writes the
-sentences from the thread's numbered facts, the role, the person's name and your evidence list.
+sentences from the thread's numbered facts, the problem Work found, the role, the person's name
+and your evidence list.
 Picking which evidence items match a fact is one small-model call. Then code decides what goes in:
 
 - a sentence about the company must cite a fact Work holds whose source still says it; one about

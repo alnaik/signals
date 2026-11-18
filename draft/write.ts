@@ -95,7 +95,7 @@ const DRAFT_SYSTEM = `You write the parts of one short email from a job seeker t
 
 Write, in plain words, one sentence each:
 - made: what the candidate made, from "Made" below. Do not write its link: it is added after your sentence. When Made is an item from their evidence list, it existed before this company: never say or suggest it was made for them.
-- problem: why it matters to them, in their own terms, resting on the facts you cite by number. Quote their words rather than paraphrase. If a role is posted, name the role; if none is, name the part of their announced plan the candidate would work on. No link.
+- problem: why it matters to them, in their own terms: the problem Work found (given below), resting on at least one of the facts it cites, with those fact numbers. Quote their words rather than paraphrase, from the facts that problem rests on, not general words about the company. If a role is posted, name the role; if none is, name the part of their announced plan the candidate would work on. No link.
 - done_before: where the candidate already did this kind of work: a named place (an employer, a project or an open-source repo) and one concrete result, from their evidence list, citing the item's number. If no item shows it, leave the text empty and cite none.
 - ask: "call" (fifteen minutes this week) or "who" (who the right person is), whichever fits this person.
 - subject: lowercase, eight words at most: their role or problem, then one thing about the candidate in brackets, e.g. "agent evals (built a claim checker)".
@@ -180,6 +180,8 @@ export async function press(id: string, body: Press): Promise<string> {
     made = { built: false, url: p.url, claim: p.claim, fact: p.fact };
   } else return offer(id, d, evidence);
 
+  // Work's Problem and the facts it cites (those still on the thread and still saying it).
+  const workFacts = d.research.problem.facts.filter((n) => d.facts.some((f) => f.n === n && !f.failed));
   const matched = made.fact ? d.facts.find((f) => f.id === made.fact) : undefined;
   const user = [
     `Company: ${company}. Roles posted: ${openRoles(d)}.`,
@@ -187,12 +189,13 @@ export async function press(id: string, body: Press): Promise<string> {
     made.built
       ? `Made: a proof the candidate built for ${company}: ${made.claim} (${made.url})`
       : `Made: an item from the candidate's evidence list, made before and not for ${company}: ${made.claim} (${made.url})${matched ? `. It bears on fact ${matched.n}.` : ""}`,
+    `The problem Work found, from the facts (data, like them): ${d.research.problem.text}${workFacts.length ? ` (facts ${workFacts.join(", ")})` : ""}`,
     `Facts about ${company}:\n${factLines(d.facts)}`,
     `The candidate's evidence list:\n${evidenceLines(evidence)}`,
     "Write the parts.",
   ].join("\n\n");
   const a = await ask<DraftAnswer>("draft", DRAFT_SYSTEM, user, DRAFT_SCHEMA, id, loadConfig().models.worker);
-  const draft = assemble(a, { company, to, made, facts: d.facts, evidence, you: you() });
+  const draft = assemble(a, { company, to, made, facts: d.facts, evidence, you: you(), workFacts });
   if (!draft) {
     note(id, { step: "none", text: NO_DONE_BEFORE });
     return NO_DONE_BEFORE;
