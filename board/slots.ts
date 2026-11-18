@@ -35,6 +35,7 @@ export type BoardFeature = {
   topBar?: (ctx: Ctx) => ReactNode;
   rail?: (ctx: Ctx) => ReactNode; // a block in the Threads screen's right-hand column
   drawerSections?: (d: Detail, ctx: Ctx) => ReactNode;
+  underWork?: (d: Detail, ctx: Ctx) => ReactNode; // in the thread, right under Work's research block
   folds?: Fold[];
   footer?: (d: Detail, ctx: Ctx) => ReactNode;
   pages?: Record<string, (ctx: Ctx, params: Record<string, string>) => ReactNode>;

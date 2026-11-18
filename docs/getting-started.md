@@ -90,8 +90,12 @@ Without it, Apply still opens the form, just unfilled.
   the PDF in `me/`; you submit, then press **Done**. What you type there is saved, so the same
   question fills itself on the next form. On any other page, click the extension's button to fill it.
 - **Threads**: one per company you acted on. **Work** gathers facts and writes Problem /
-  Person / Proof, now, with progress on the row; copy it and write the message yourself, then
-  **Mark sent** or **Got a reply**. A role you're done with: **Done** once applied, or **Dismiss**.
+  Person / Proof, now, with progress on the row. Under it, **Write a draft** writes a short
+  message to that person (no posted role, nothing in your evidence list that fits, and the thread
+  says so instead); edit it and send it yourself, then **Mark sent** or **Got a reply**. Built the
+  proof Work planned? Paste its link and **Mark built**: the draft leads with it. Once you copied
+  a draft, **Write a follow-up** writes one, only if there is something new. A role you're done
+  with: **Done** once applied, or **Dismiss**.
 - **Watchlist**: the companies you chose. **Add** one by its website, careers page, board or a
   posting; its board is read now.
 

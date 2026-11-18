@@ -191,6 +191,8 @@ type SmallOpts = {
   thread?: string;
   board?: number; // the board whose page this reads, for its ledger line
   maxTokens?: number;
+  model?: string; // another model than the small one (a message draft runs on Work's)
+  pressed?: boolean; // started by your press: never held by, nor counted in, the day's background calls
 };
 
 /** One headless Claude Code call with no tools at all: the prompt in, the schema's JSON out. */
@@ -245,7 +247,7 @@ export async function smallJson<T>(opts: SmallOpts): Promise<T> {
   const viaSubscription = via === "subscription";
   if (!viaSubscription && !canSpend(0.01)) throw new OverCap(); // the subscription costs nothing real
   // The subscription costs no money but draws on the plan: a day's background calls are bounded.
-  if (viaSubscription && backgroundLeft()?.left === 0) throw new DayLimit();
+  if (viaSubscription && !opts.pressed && backgroundLeft()?.left === 0) throw new DayLimit();
   try {
     return await smallJsonOnce<T>(opts, viaSubscription);
   } catch (err) {
@@ -256,7 +258,8 @@ export async function smallJson<T>(opts: SmallOpts): Promise<T> {
 }
 
 async function smallJsonOnce<T>(opts: SmallOpts, viaSubscription: boolean): Promise<T> {
-  const model = loadConfig().models.small;
+  const model = opts.model ?? loadConfig().models.small;
+  const pressed = opts.pressed ? { pressed: true } : {};
   if (viaSubscription) {
     const { json, usd } = await viaClaudeCode(opts, model);
     record({
@@ -268,6 +271,7 @@ async function smallJsonOnce<T>(opts: SmallOpts, viaSubscription: boolean): Prom
       note: "claude-code-subscription",
       ...(opts.thread ? { thread: opts.thread } : {}),
       ...(opts.board ? { board: opts.board } : {}),
+      ...pressed,
     });
     return json as T;
   }
@@ -289,6 +293,7 @@ async function smallJsonOnce<T>(opts: SmallOpts, viaSubscription: boolean): Prom
     usage: res.usage as unknown as Record<string, number>,
     ...(opts.thread ? { thread: opts.thread } : {}),
     ...(opts.board ? { board: opts.board } : {}),
+    ...pressed,
   });
   if (res.stop_reason === "refusal") throw new Error(`${opts.station}: the model declined`);
   const text = res.content.find((b) => b.type === "text");

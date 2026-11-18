@@ -5,6 +5,7 @@ Job Signal pays for a model only where judgment is needed, and caps real money o
 | Station | Model | When |
 | --- | --- | --- |
 | Work | Sonnet, one run per press, at most 12 turns; presses during a run go back to back after it | when you press Work |
+| Message draft (`draft`, `draft-match`, `draft-followup`) | Sonnet, one call per Write a draft, Write again or Write a follow-up (about two cents on an API key); with no proof built, first one Haiku call to match your evidence to their facts. Pressed by you, so never held by or counted in `background_day` | when you press it |
 | Work on a company with no known website (`discover-domain`) | Haiku, two calls, and one web search plus one company search (cached 30 days), after the free checks (its Ashby board, its posts) | when you press Work on it, and when discovery looks up the website of a company that came with a board (once, again after 30 days, within `search_daily`) |
 | Lead classification, link-check paraphrase | Haiku, one call each | nightly |
 | Unknown drop-file formats | Haiku, once per new format | when the file lands |

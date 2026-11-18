@@ -60,6 +60,19 @@ export function decide(id: string, body: Record<string, any>, now = new Date()):
       if (body.what) data.what = String(body.what);
       toast = "Copied";
       break;
+    case "proof_built": {
+      // The proof Work planned, now made: its link is what a draft's first sentence carries.
+      if (!t.research?.proof.text) return no("Work hasn't planned a proof here yet", 400);
+      const url = String(body.url ?? "").trim();
+      let ok = false;
+      try {
+        ok = /^https?:$/.test(new URL(url).protocol);
+      } catch {}
+      if (!ok) return no("Paste the proof's link, starting https://", 400);
+      data.url = url;
+      toast = "Proof marked built";
+      break;
+    }
     case "remove_contact": {
       const c = t.contacts.find((x) => x.id === body.entry);
       if (!c) return no("That person isn't on this thread", 400);

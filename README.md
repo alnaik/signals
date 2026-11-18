@@ -97,8 +97,12 @@ bun bin/jobsignal.ts               # list commands
    add one, fills the work history and education. You check it and press Submit yourself.
 7. **Work finds who to write to, if you want.** It gathers public facts about the company, each
    with the exact words it came from, and writes a short brief: a problem the company has, the
-   person who owns it, and something you could make for them. You write the message. It works on a
-   company with no open role too: that is what Work on Signals is for.
+   person who owns it, and something you could make for them. It works on a company with no open
+   role too: that is what Work on Signals is for.
+8. **A draft, if you ask.** Under Work's brief, **Write a draft** writes a short message to that
+   person: what you made, their problem, where you've done this before, and one ask, 80 words at
+   most. Every sentence rests on a fact or an item of your evidence list; one that doesn't is left
+   out and listed as missing. You edit it and send it yourself.
 
 **Sources** shows each source, whether it is on, and the steps to connect it:
 
@@ -132,7 +136,7 @@ that folder.
 | Companies' job boards and careers pages | A request for their public job list. Nothing about you. | About every 6 hours per board |
 | Hacker News | A request for the public "Who is hiring" thread | Every 6 hours |
 | The SEC | Your email address, because the SEC asks every reader of its filings for one | Nightly, if Funding filings is on |
-| Anthropic (through Claude Code or your API key) | The text of posts, alert mails and careers pages to sort; for Work, the facts found about that company, your name, your positioning page and your list of evidence. Never your CV. | Only if you connect a model |
+| Anthropic (through Claude Code or your API key) | The text of posts, alert mails and careers pages to sort; for Work, the facts found about that company, your name, your positioning page and your list of evidence; for a draft, the same facts, the person's name and your evidence list. Never your CV. | Only if you connect a model |
 | The search provider you pick (Context.dev, Exa, Firecrawl or Parallel), and Hunter if you add it | Company names, websites and search words; for Work, the name of the person to find | Only if you add its key |
 | GitHub, X, Gmail, a spare mailbox, feeds and fund job sites | Read-only requests to the accounts and addresses you connect | Only if you connect them |
 
@@ -148,7 +152,8 @@ you set ($5 to start). Details: [docs/spend.md](docs/spend.md).
 
 ### The rules it keeps
 
-- **Nothing is sent for you.** No form is submitted and no message is sent by Job Signal.
+- **Nothing is sent for you.** No form is submitted and no message is sent by Job Signal. A
+  draft has Copy, never Send.
 - **robots.txt is honoured.** A site that asks not to be read is not read. Exceptions can only be
   added by you, in `config.toml`, each with a reason.
 - **LinkedIn pages are never read**, and it never applies on LinkedIn. LinkedIn job alerts come in

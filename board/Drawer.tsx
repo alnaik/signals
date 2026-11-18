@@ -436,6 +436,12 @@ export function describe(e: Entry): string {
       return `contact: ${d.name}${d.role ? `, ${d.role}` : ""}`;
     case "research":
       return d.problem ? `research: ${d.problem.text}` : (d.text ?? "research");
+    case "draft":
+      if (d.step === "draft") return `draft written · ${d.words} words`;
+      if (d.step === "followup") return `follow-up written · ${d.words} words`;
+      if (d.step === "candidates") return `evidence offered: ${d.pairs?.length ?? 0}`;
+      if (d.step === "pick") return `evidence picked: ${d.claim}`;
+      return d.text ?? "draft";
     case "note":
       if (d.event === "run_done")
         return [
@@ -539,6 +545,11 @@ export function Drawer({
             </div>
           ))}
           <Research d={d} ctx={ctx} />
+          {registry.map((f) => (
+            <div key={f.name} style={{ display: "contents" }}>
+              {f.underWork?.(d, ctx)}
+            </div>
+          ))}
           <Evidence d={d} />
           <Folds d={d} ctx={ctx} />
         </div>

@@ -10,13 +10,15 @@ export const KINDS = [
   "reply",
   "research",
   "note",
+  "draft",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
 // Every decision a thread's log can hold. `apply`, `applied` and `drop` name a role by its url.
 // `close` is written only by the past-applications import; the board has no Close button.
 // `remove_contact` takes back one saved person: `entry` names their contact entry (the log is
-// append-only, so a Remove is a line of its own).
+// append-only, so a Remove is a line of its own). `proof_built` says the proof Work planned is made,
+// with its link: only then does a draft lead with it.
 export const ACTIONS = [
   "apply",
   "applied",
@@ -27,6 +29,7 @@ export const ACTIONS = [
   "close",
   "copy",
   "remove_contact",
+  "proof_built",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 

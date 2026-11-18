@@ -67,7 +67,32 @@ no role.
 Then it is yours. **Apply** opens the form in Chrome and the extension fills it from your
 profile, your earlier answers and your CV; you check it and press Submit. **Work** is for when
 you want a person to write to: it gathers public facts, then writes a problem, a person and a
-proof (something you could make for them). You write and send the message.
+proof (something you could make for them).
+
+Under Work's block, **Write a draft** writes a short message to that person, only when you press
+it. It is a draft: Copy it, edit it and send it yourself. There is no send button. The draft:
+
+- **To** the person Work found. Their address is shown, with where it came from, only when it is
+  verified and theirs alone; a guessed address or a shared one (careers@, jobs@, hello@) never is.
+  Then the draft says no address was found.
+- **Subject**: lowercase, eight words at most, the thing about you in brackets.
+- **Four sentences**, 80 words at most with the first name: what you **made**, with its link;
+  **their problem**, resting on a fact Work holds; where you have **done** this kind of work
+  **before**, from your evidence list; and one **ask** (fifteen minutes this week, or who the right
+  person is). When you built the proof Work planned (paste its link beside **Built the proof?**),
+  the draft leads with it. Otherwise their problem comes first, and an item of your evidence list
+  you pick is what you made: the board shows the items that match a fact about them, each beside
+  that fact, and the one you pick stays on the thread.
+- **Your name and one link**, your website or else your GitHub, from About you.
+
+The word count is always shown ("71 / 80"). Over 80, it says so; it never shortens itself. Some
+cases get no draft, and the thread says what is missing: no one named to write to; no posted role
+or announced plan to point at; no evidence item that fits and no proof built; nothing in your
+evidence list that shows done before.
+
+Once you copied a draft, the thread shows the date. **Write a follow-up** writes one, 40 words at
+most, only when there is something new: a proof you built since, or a new fact about them. There is
+never a second one, and nothing reminds you.
 
 The **Sources** screen shows the same path with live numbers, and where each company stopped:
 
@@ -105,6 +130,20 @@ and nothing else. It runs with:
 - a cap: a few turns on a subscription, a dollar limit on an API key, and a 20-minute stop.
 
 It never sees your CV, your keys or your email.
+
+**A message draft** is one model call when you press for it, with no tools: Work's model writes the
+sentences from the thread's numbered facts, the role, the person's name and your evidence list.
+Picking which evidence items match a fact is one small-model call. Then code decides what goes in:
+
+- a sentence about the company must cite a fact Work holds whose source still says it; one about
+  you, an item of your evidence list. One that doesn't is left out and listed under the draft as
+  "missing: …", so Copy only ever copies supported sentences. The ask needs no source.
+- one link in the body, the one to what you made, added by code; a sentence with another is left
+  out. The sign-off's link is the only other.
+- "passionate", "I came across", "great fit", "I hope this finds you well" and "excited" keep a
+  sentence out.
+- an item you made before is never worded as made for this company.
+- the ask is one of the two, written by code; the model only picks which.
 
 ## Where your data lives
 
@@ -165,6 +204,7 @@ automatically.
 | `northstar/` | Your north star, the sentence in the board's margin (kept in `me/`) |
 | `apply/`, `extension/` | Reading application forms; the Chrome form filler |
 | `worker/` | Work: gathering facts and the locked-down model run |
+| `draft/` | The message draft on a thread, its follow-up, and the checks they pass |
 | `setup/`, `positioning/` | First run and Settings; the positioning page |
 | `mail/`, `gmail/`, `xapi/` | The read-only mailbox, Gmail and X connections |
 | `dropfolder/`, `pastapps/` | The drop folder; importing past applications |

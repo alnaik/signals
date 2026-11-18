@@ -19,6 +19,7 @@ export type LedgerEntry = {
   usage?: Record<string, number>;
   note?: string;
   failed?: boolean; // the call threw; usd is 0 unless it may still have been billed
+  pressed?: boolean; // a call you started with a press (a message draft): never a background call
 };
 
 export function record(e: Omit<LedgerEntry, "ts"> & { ts?: string }): LedgerEntry {
@@ -118,12 +119,13 @@ export function dayStart(now = new Date()): Date {
 
 /**
  * The small model's background calls today (sorting posts, finding websites and boards, reading
- * careers pages, the employer check…): every model line but Work's own runs.
+ * careers pages, the employer check…): every model line but Work's own runs and calls you pressed for.
  */
 export function backgroundToday(now = new Date()): number {
   const iso = dayStart(now).toISOString();
   let n = 0;
-  for (const e of entries()) if (e.kind === "model" && e.station !== "worker" && e.ts >= iso) n++;
+  for (const e of entries())
+    if (e.kind === "model" && e.station !== "worker" && !e.pressed && e.ts >= iso) n++;
   return n;
 }
 
