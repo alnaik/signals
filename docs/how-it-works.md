@@ -144,6 +144,8 @@ Picking which evidence items match a fact is one small-model call. Then code dec
 - "passionate", "I came across", "great fit", "I hope this finds you well" and "excited" keep a
   sentence out.
 - an item you made before is never worded as made for this company.
+- a sentence that names a fact or item by its number ("fact 3", "(item 5)") is left out: the reader
+  has no such list.
 - the ask is one of the two, written by code; the model only picks which.
 
 ## Where your data lives

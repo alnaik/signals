@@ -107,6 +107,17 @@ export function quoteCheck(text: string, quotes: string[]): string | null {
   return null;
 }
 
+/**
+ * The model's own reference marks ("facts 1, 7", "item 5", "(1)", "[2]"): the reader has no fact 1.
+ * Real numbers stay out of it: "#915", "v2.1", "$40", "18 tests", "(2024)".
+ */
+export function refMark(text: string): boolean {
+  return (
+    /\b(facts?|items?|evidence( items?)?|sources?|refs?)\s*#?\d+\b/i.test(text) ||
+    /[([]\s*\d{1,2}(\s*[,;–-]\s*\d{1,2})*\s*[)\]]/.test(text)
+  );
+}
+
 const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** An item that existed before is never worded as made for this company. */
 export function madeForThem(text: string, company: string): boolean {
@@ -217,6 +228,7 @@ export function assemble(a: DraftAnswer, c: Context): DraftData | null {
     const b = bannedIn(text);
     if (b) return `it said "${b}"`;
     if (hasLink(text)) return "it had a link of its own; the body holds one";
+    if (refMark(text)) return "it named a fact or item by number";
     return null;
   };
 
@@ -350,12 +362,14 @@ export function assembleFollowup(
         ? `it said "${b}"`
         : hasLink(text)
           ? "it had a link of its own"
-          : !facts.length && !made
-            ? "nothing new backs it"
-            : quoteCheck(
-                text,
-                facts.map((n) => fresh.get(n)!.source?.quote ?? ""),
-              );
+          : refMark(text)
+            ? "it named a fact or item by number"
+            : !facts.length && !made
+              ? "nothing new backs it"
+              : quoteCheck(
+                  text,
+                  facts.map((n) => fresh.get(n)!.source?.quote ?? ""),
+                );
     if (!why && made && !linked) {
       text = `${text.replace(/[.\s:,-]+$/, "")}: ${bare(c.madeSince!)}.`;
       linked = true;

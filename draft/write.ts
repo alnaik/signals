@@ -100,6 +100,8 @@ Write, in plain words, one sentence each:
 - ask: "call" (fifteen minutes this week) or "who" (who the right person is), whichever fits this person.
 - subject: lowercase, eight words at most: their role or problem, then one thing about the candidate in brackets, e.g. "agent evals (built a claim checker)".
 
+Sentence text never names a fact or item by its number ("fact 3", "(item 5)", "[2]"): the reader has no such list. The numbers go only in the facts and evidence fields.
+
 The three sentences you write stay under ${MAX_WORDS - 15} words together. No greeting and no sign-off: they are added. Never write: passionate, I came across, great fit, I hope this finds you well, excited. Claim nothing about the company the facts don't say, and nothing about the candidate their evidence doesn't say.`;
 
 const FOLLOWUP_SCHEMA = obj({
@@ -110,7 +112,7 @@ const FOLLOWUP_SCHEMA = obj({
 });
 const FOLLOWUP_SYSTEM = `You write one short follow-up to an email a job seeker already sent. ${SAFETY}
 
-Say only what is new: the new facts below, or the thing the candidate made since. One or two sentences, under ${MAX_FOLLOWUP_WORDS - 5} words together. Each sentence cites the new facts it rests on by number, or sets made true when it is about the thing made since. Do not write a link: it is added after. No greeting and no sign-off. Never write: passionate, I came across, great fit, I hope this finds you well, excited. Nothing new worth saying: return no sentences.`;
+Say only what is new: the new facts below, or the thing the candidate made since. One or two sentences, under ${MAX_FOLLOWUP_WORDS - 5} words together. Each sentence cites the new facts it rests on by number in its facts field, never in its text, or sets made true when it is about the thing made since. Do not write a link: it is added after. No greeting and no sign-off. Never write: passionate, I came across, great fit, I hope this finds you well, excited. Nothing new worth saying: return no sentences.`;
 
 async function ask<T>(
   station: string,

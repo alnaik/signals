@@ -28,6 +28,7 @@ import {
   NO_PERSON,
   NO_TARGET,
   quoteCheck,
+  refMark,
   toLine,
 } from "./shape.ts";
 import { press } from "./write.ts";
@@ -588,4 +589,45 @@ test("their problem rests on the problem Work found, or goes under the draft", a
   expect((last(id).data as DraftData).missing).toEqual([
     "missing: their problem (it doesn't rest on the problem Work found)",
   ]);
+});
+
+test("a sentence that names a fact or item by number stays out; real numbers don't count", () => {
+  for (const t of [
+    "The issue is open with 97 reactions and no assignee (facts 1, 7).",
+    "In claim (item 5), the plugin checks every run of eight words.",
+    "Your post says trust is the hard part (fact 3).",
+    "Your post says trust is the hard part [2].",
+    "Your post says trust is the hard part (1).",
+    "As evidence 4 shows, I cut wrong answers by a third.",
+  ])
+    expect([t, refMark(t)]).toEqual([t, true]);
+  for (const t of [
+    "Issue #915 has 97 reactions and no assignee.",
+    "It broke in v2.1 and again in 2.3.4.",
+    "The seed round was $40 million (2024).",
+    "My fix added 18 tests and passed all of them.",
+    "Fifteen minutes this week, between 2 and 4?",
+  ])
+    expect([t, refMark(t)]).toEqual([t, false]);
+  const m = assemble(
+    {
+      ...EXAMPLE,
+      problem: { text: `${EXAMPLE.problem.text} (facts 1, 7)`, facts: [1] },
+      done_before: { ...EXAMPLE.done_before, text: "At Woodgrove (item 2), it cut wrong answers by a third" },
+    },
+    ctx(thread(), true),
+  )!;
+  expect(m.sentences.map((s) => s.part)).toEqual(["made", "ask"]);
+  expect(m.missing).toEqual([
+    "missing: their problem (it named a fact or item by number)",
+    "missing: done before (it named a fact or item by number)",
+  ]);
+  expect(messageText(m)).not.toMatch(/facts 1|item 2/);
+  const d = derive(read(thread()));
+  const f = assembleFollowup(
+    { sentences: [{ text: "Your team opened the evals repo (fact 1)", facts: [1], made: false }] },
+    { to: toLine(d)!, newFacts: d.facts, madeSince: null, you: { name: "Sam Example", link: "" } },
+  );
+  expect(f.sentences).toEqual([]);
+  expect(f.missing[0]).toBe("missing: a new fact (it named a fact or item by number)");
 });
