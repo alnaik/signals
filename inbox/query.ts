@@ -154,6 +154,23 @@ export function inboxPage(
   };
 }
 
+/**
+ * The companies you dismissed and their roles that fit, open at the last read: a dismissed
+ * company's board isn't read again, so this is what was open when you dismissed it.
+ * A watched one isn't counted: watching brings its new roles back.
+ */
+export function dismissedCount(): { companies: number; roles: number } {
+  ensureScored();
+  const out = `c.dismissed_at IS NOT NULL AND c.watched_at IS NULL`;
+  return open()
+    .query(
+      `SELECT (SELECT count(*) FROM companies c WHERE ${out}) AS companies,
+         (SELECT count(*) FROM roles r JOIN companies c ON c.id = r.company_id
+          WHERE ${out} AND r.closed_at IS NULL AND r.fits = 1) AS roles`,
+    )
+    .get() as { companies: number; roles: number };
+}
+
 /** How many companies the Inbox lists with these filters: the same `page` as inboxPage, counted. */
 export function inboxCount(q: InboxQuery = {}, now = new Date()): number {
   ensureScored();

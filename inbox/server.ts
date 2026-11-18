@@ -12,6 +12,7 @@ import { progress } from "../watchlist/server.ts";
 import { type CompanyAction, chooseCompany, chooseRole, type RoleAction } from "./choose.ts";
 import {
   companyRoles,
+  dismissedCount,
   inboxCompany,
   inboxCount,
   inboxMetros,
@@ -188,6 +189,8 @@ export const feature: ServerFeature = {
     "/api/others/companies/:cid": {
       GET: (req) => json({ company: otherCompany(num(req.params.cid), flags(req)) }),
     },
+    // The Inbox's line on the companies you dismissed.
+    "/api/inbox/dismissed": { GET: () => json(dismissedCount()) },
     // Review titles: the Inbox's line, and the page.
     "/api/review-titles/count": { GET: () => json(reviewCount()) },
     // A group's roles, when it is opened.

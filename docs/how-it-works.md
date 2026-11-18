@@ -43,6 +43,10 @@ you dismissed. Drop takes a word out: its roles leave the Inbox at once, unless 
 yours matches them, and its titles aren't offered in Review titles. Roles you applied to or
 dismissed stay as they are. Add back, beside a word you dropped, puts it back.
 
+Below the Review titles line, another counts the companies you dismissed and the roles that fit
+you that were open there when you did: a dismissed company's board isn't read again, so the
+count stays as it was. They count as cleared.
+
 The Inbox's **search box** looks at every open role, fitting or not, at any company: each word
 must be in the company's name, the title, the place or the role's kept description
 (`deloitte ai and data`; `"ai & data"` for words together; `-clearance` to leave some out; a

@@ -619,3 +619,22 @@ test("Review titles lists your title words with their record; Drop takes one out
     title_dropped: [],
   });
 });
+
+test("the Inbox's line on dismissed companies counts them and their open roles that fit; a watched one isn't counted", async () => {
+  const { dismissedCount } = await import("./query.ts");
+  expect(dismissedCount()).toEqual({ companies: 0, roles: 0 });
+  const tarn = withRoles("Tarnley", "tarnley.dev", [
+    job("t1", "Engineer"),
+    job("t2", "Platform Engineer"),
+    job("t3", "Engineer II"),
+    job("t4", "Office Manager"), // doesn't fit
+  ]);
+  const quiet = upsertCompany({ name: "Quietwater", domain: "quietwater.dev" }); // nothing open
+  withRoles("Larkspur", "larkspur.dev", [job("l1", "Engineer")]); // not dismissed
+  const watched = withRoles("Mossbank", "mossbank.dev", [job("m1", "Engineer")]);
+  for (const id of [tarn, quiet, watched]) dismissCompany(id, now);
+  watchCompany(watched, "manual", now);
+  open().query("UPDATE companies SET dismissed_at = ? WHERE id = ?").run(now.toISOString(), watched);
+  open().query("UPDATE roles SET closed_at = ? WHERE ext_id LIKE '%t3'").run(now.toISOString());
+  expect(dismissedCount()).toEqual({ companies: 2, roles: 2 });
+});

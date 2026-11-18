@@ -470,6 +470,38 @@ const savedCity = (): string | null => {
   }
 };
 
+const thousands = (x: number) => x.toLocaleString("en-US");
+
+/**
+ * Under the Inbox's switches too: the companies you dismissed, and the roles that fit you that were
+ * open there when you did (their boards aren't read after). Cleared, as much as what you applied to.
+ */
+function DismissedLine() {
+  const [c, setC] = useState<{ companies: number; roles: number } | null>(null);
+  useEffect(() => {
+    const load = () =>
+      fetch("/api/inbox/dismissed")
+        .then((r) => (r.ok ? r.json() : null))
+        .then(setC)
+        .catch(() => {});
+    load();
+    window.addEventListener("inbox.changed", load);
+    window.addEventListener("watchlist.changed", load);
+    return () => {
+      window.removeEventListener("inbox.changed", load);
+      window.removeEventListener("watchlist.changed", load);
+    };
+  }, []);
+  if (!c?.companies) return null;
+  const one = c.companies === 1;
+  return (
+    <div className="muted" style={{ fontSize: 13, margin: "0 0 10px" }}>
+      {thousands(c.companies)} {one ? "company" : "companies"} dismissed: {thousands(c.roles)}{" "}
+      {c.roles === 1 ? "role that fits you was" : "roles that fit you were"} open there when you did
+    </div>
+  );
+}
+
 function InboxPage({ ctx, params }: { ctx: Ctx; params: Record<string, string> }) {
   const [filters, setFilters] = useState<Filters>(() => ({
     source: null,
@@ -707,6 +739,8 @@ function InboxPage({ ctx, params }: { ctx: Ctx; params: Record<string, string> }
           <>
             {/* Only fits reach the Inbox; the titles in your places that might be yours wait here. */}
             <ReviewLine ctx={ctx} />
+            {/* What Dismiss cleared: those companies' roles that fit stay out of the Inbox. */}
+            <DismissedLine />
             {companies.length === 0 &&
               (filters.source || filters.metro || filters.remote ? (
                 <div className="empty" style={{ paddingLeft: 0 }}>
