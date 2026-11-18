@@ -511,7 +511,8 @@ function closeMatch(x: Toks, c: Phrases, gap = 2): Close | undefined {
         fill.push(...t.slice(j, found));
         j = found + 1;
       }
-      if (fill.length && (fill.length < fewest || (fill.length === fewest && p.i < best!.phrase.i))) {
+      // More than `gap` words between in all is no match: `fewest` starts past it, so a tie needs a best.
+      if (fill.length && (fill.length < fewest || (best && fill.length === fewest && p.i < best.phrase.i))) {
         best = { phrase: p, filler: fill.join(" "), from: i, to: j - 1 };
         fewest = fill.length;
       }

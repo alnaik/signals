@@ -135,3 +135,14 @@ test("tokens: + and # stay at a word's end; small words soften the next break", 
   expect(variants("Senior")).toEqual(["senior", "sr"]);
   expect(variants("engineers")).toEqual(["engineers", "engineer", "eng", "engr"]);
 });
+
+test("review: a three-word phrase with more than two words between in all falls to any order, and no crash", () => {
+  const g: PostingFilters = { ...f, title_include: ["Machine Learning Engineer"] };
+  // One word between the first two, two between the last two: three in all, past the limit of two.
+  expect(score({ title: "Machine Vision Learning Platform Ops Engineer" }, g).review).toBe(
+    "Machine Learning Engineer (any order)",
+  );
+  expect(score({ title: "Machine Vision Learning Engineer" }, g).review).toBe(
+    "Machine Learning Engineer + vision",
+  );
+});
