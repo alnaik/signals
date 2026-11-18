@@ -171,72 +171,97 @@ const WORDS_SHOWN = 10;
 
 /**
  * Your title words, most Inbox roles first, each with its record. Drop takes one out of them; it
- * stays here, dropped, with Add back, until you leave the page.
+ * stays in its place, dropped, with Add back, until you leave the page. Each word keeps the place
+ * it was first shown in, so nothing moves under the pointer; one added from a group comes last.
+ * While a Drop or Add back runs (the rescore takes seconds), its row says so and no other is taken.
  */
 function Words({ words, ctx, reload }: { words: TitleWord[]; ctx: Ctx; reload: () => Promise<void> }) {
   const [more, setMore] = useState(false);
   const [dropped, setDropped] = useState<string[]>([]);
+  const [order, setOrder] = useState<string[]>([]);
+  const [busy, setBusy] = useState<{ word: string; action: "drop" | "add" } | null>(null);
+  const merged = [...order, ...words.map((w) => w.word).filter((w) => !order.includes(w))];
+  // biome-ignore lint/correctness/useExhaustiveDependencies: merged follows words
+  useEffect(() => setOrder(merged), [words]);
   const post = async (action: "drop" | "add", word: string) => {
-    const res = await ctx.post("/api/review-titles", { action, key: "", phrase: word });
-    const out = await res.json().catch(() => ({ toast: "Something went wrong" }));
-    ctx.toast(out.toast);
-    if (res.ok) setDropped((ds) => (action === "drop" ? [...ds, word] : ds.filter((d) => d !== word)));
-    await reload();
-    await ctx.refetch();
+    if (busy) return;
+    setBusy({ word, action });
+    try {
+      const res = await ctx.post("/api/review-titles", { action, key: "", phrase: word });
+      const out = await res.json().catch(() => ({ toast: "Something went wrong" }));
+      ctx.toast(out.toast);
+      if (res.ok) setDropped((ds) => (action === "drop" ? [...ds, word] : ds.filter((d) => d !== word)));
+      await reload();
+      await ctx.refetch();
+    } finally {
+      setBusy(null);
+    }
   };
-  const shown = more ? words : words.slice(0, WORDS_SHOWN);
-  const row = (word: string, line: string, button: React.ReactNode, faint = false) => (
-    <div
-      key={word}
-      className="row quiet"
-      style={{ gridTemplateColumns: "minmax(0,1fr) auto", cursor: "default" }}
-    >
-      <div className="l1" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
-        <span className={faint ? "faint" : undefined} style={{ fontSize: 15, fontWeight: 500 }}>
-          {word}
-        </span>
-        <span className="muted">{line}</span>
-      </div>
-      <div className="actions">{button}</div>
-    </div>
-  );
+  const byWord = new Map(words.map((w) => [w.word, w]));
+  const all = merged.filter((w) => byWord.has(w) || dropped.includes(w));
+  const shown = more ? all : all.slice(0, WORDS_SHOWN);
+  const button = (word: string, action: "drop" | "add", title: string) => {
+    const mine = busy?.word === word;
+    return (
+      <button
+        type="button"
+        className="small"
+        title={title}
+        disabled={busy !== null}
+        onClick={() => post(action, word)}
+      >
+        {mine
+          ? busy.action === "drop"
+            ? "Dropping…"
+            : "Adding back…"
+          : action === "drop"
+            ? "Drop"
+            : "Add back"}
+      </button>
+    );
+  };
+  if (!all.length) return null;
   return (
     <>
       <div className="label" style={{ margin: "14px 0 4px" }}>
         Your title words · {n(words.length)}
       </div>
-      {dropped.map((w) =>
-        row(
-          w,
-          "dropped",
-          <button
-            type="button"
-            className="small"
-            title={`Puts “${w}” back in your title words`}
-            onClick={() => post("add", w)}
+      {shown.map((word) => {
+        const w = dropped.includes(word) ? null : byWord.get(word);
+        return (
+          <div
+            key={word}
+            className="row quiet"
+            style={{ gridTemplateColumns: "minmax(0,1fr) auto", cursor: "default" }}
           >
-            Add back
-          </button>,
-          true,
-        ),
-      )}
-      {shown.map((w) =>
-        row(
-          w.word,
-          `${n(w.inbox)} in the Inbox · ${n(w.applied)} applied · ${n(w.dismissed)} dismissed`,
-          <button
-            type="button"
-            className="small"
-            title={`Takes “${w.word}” out of your title words: its roles leave the Inbox, unless another word of yours matches them. Roles you applied to or dismissed stay as they are.`}
-            onClick={() => post("drop", w.word)}
-          >
-            Drop
-          </button>,
-        ),
-      )}
-      {shown.length < words.length && (
+            <div
+              className="l1"
+              style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}
+            >
+              <span className={w ? undefined : "faint"} style={{ fontSize: 15, fontWeight: 500 }}>
+                {word}
+              </span>
+              <span className="muted">
+                {w
+                  ? `${n(w.inbox)} in the Inbox · ${n(w.applied)} applied · ${n(w.dismissed)} dismissed`
+                  : "dropped"}
+              </span>
+            </div>
+            <div className="actions">
+              {w
+                ? button(
+                    word,
+                    "drop",
+                    `Takes “${word}” out of your title words: its roles leave the Inbox, unless another word of yours matches them. Roles you applied to or dismissed stay as they are.`,
+                  )
+                : button(word, "add", `Puts “${word}” back in your title words`)}
+            </div>
+          </div>
+        );
+      })}
+      {shown.length < all.length && (
         <button type="button" className="small link" onClick={() => setMore(true)}>
-          show all {n(words.length)} words
+          show all {n(all.length)} words
         </button>
       )}
     </>
@@ -289,7 +314,7 @@ export function ReviewTitles({ ctx }: { ctx: Ctx }) {
           title words out: its roles leave the Inbox and aren't shown here, unless another word of yours
           matches them.
         </p>
-        {words.length > 0 && <Words words={words} ctx={ctx} reload={load} />}
+        <Words words={words} ctx={ctx} reload={load} />
         {groups.length === 0 && (
           <div className="empty">Nothing to review: every title here has your words.</div>
         )}
