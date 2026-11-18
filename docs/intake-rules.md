@@ -66,7 +66,10 @@ ledger and `config.toml` stay files.
    careers page only by its address (`/careers`, `/jobs`, `/join-us`, `careers.<domain>`), never
    a home page, help or docs site, forum, store page or article that mentions careers. One that
    lists its roles in its page data (a job list no ATS claims) or names a jobs feed is read as
-   the board without a model; one posting under it is not. Discovery runs
+   the board without a model; one posting under it is not. A list or feed whose roles are at 4 or
+   more employers (a fund's job board; a job site's feed, its titles "Engineer @ Acme") is no
+   company's: discovery refuses it, and a board that reads as one is out of use from then on,
+   its roles closed and its company with no board found, saying whose roles they are. Discovery runs
    beside the board reads, within `[discovery] tick_seconds`; what it doesn't reach waits for
    the next tick. Sources says how many companies wait and offers "Find their boards now": a
    batch run (`jobsignal find-boards`, its own process and lock, `batch.lock`) that looks for

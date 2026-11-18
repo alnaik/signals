@@ -444,6 +444,71 @@ test("refresh: the same text isn't read by the model again; changed text waits a
   expect(entries().at(-1)).toMatchObject({ station: "read-page", board: b.id });
 });
 
+test("refresh: a job site's feed held as a company's board, its roles at many employers, is refused: out of use, its roles out of the Inbox", async () => {
+  // An HN post by a job site, under one of its employers' names, stated the job site's feed.
+  const id = upsertCompany({ name: "Quillmore", domain: "postwork.dev" });
+  const board = addBoard(id, "careers-page", "https://postwork.dev/rss", "careers page", now).board!;
+  const feed = (employers: string[]) =>
+    `<?xml version="1.0"?><rss><channel>${employers
+      .map(
+        (e, i) =>
+          `<item><title>Engineer ${i} @ ${e} [$90,000 - 120,000]</title><link>https://postwork.dev/jobs/${i}</link></item>`,
+      )
+      .join("")}</channel></rss>`;
+  const insert = open().query(
+    `INSERT INTO roles (board_id, company_id, ext_id, url, title, first_seen, last_seen, fits, state)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+  );
+  for (const [n, state] of [
+    [0, "new"],
+    [1, "new"],
+    [2, "applied"],
+  ] as const)
+    insert.run(
+      board.id,
+      id,
+      `https://postwork.dev/jobs/${n}`,
+      `https://postwork.dev/jobs/${n}`,
+      `Engineer ${n} @ Brackenfield`,
+      now.toISOString(),
+      now.toISOString(),
+      state,
+    );
+  plain = (url) =>
+    url === "https://postwork.dev/rss"
+      ? feed(["Brackenfield", "Ostrava Labs", "Pellwick", "Tamsin & Co"])
+      : "<html></html>";
+  const row = () => open().query("SELECT * FROM boards WHERE id = ?").get(board.id) as Board;
+  expect((await readBoards([row()], now))[0]).toMatchObject({ status: "failed", closed: 3, listed: 0 });
+  expect(row()).toMatchObject({
+    status: "broken",
+    next_read_at: null,
+    role_count: 0,
+    last_error:
+      "no roles on the page: its roles aren't Quillmore's: Brackenfield, Ostrava Labs, Pellwick, Tamsin & Co",
+  });
+  // Its roles close, so none is in the Inbox; one you applied to keeps its state.
+  expect(open().query("SELECT state, closed_at IS NOT NULL AS closed FROM roles ORDER BY id").all()).toEqual([
+    { state: "new", closed: 1 },
+    { state: "new", closed: 1 },
+    { state: "applied", closed: 1 },
+  ]);
+  expect(getCompany(id)).toMatchObject({
+    discovery: "none",
+    discovery_note:
+      "its careers page, checked: its roles aren't Quillmore's: Brackenfield, Ostrava Labs, Pellwick, Tamsin & Co",
+  });
+  // One company's own feed is still read.
+  open().exec("DELETE FROM roles; DELETE FROM boards;");
+  const own = addBoard(id, "careers-page", "https://postwork.dev/rss", "careers page", now).board!;
+  plain = (url) =>
+    url === "https://postwork.dev/rss"
+      ? feed(["Quillmore", "Quillmore", "Quillmore", "Quillmore"])
+      : "<html></html>";
+  const ownRow = open().query("SELECT * FROM boards WHERE id = ?").get(own.id) as Board;
+  expect((await readBoards([ownRow], now))[0]).toMatchObject({ status: "changed", listed: 4 });
+});
+
 test("no browser on this Mac: a rendered page's read isn't a failure, and discovery leaves its page waiting", async () => {
   rendered = () => {
     throw new Error("browserType.launch: Executable doesn't exist at /x/chrome-headless-shell\n╔══════╗");

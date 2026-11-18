@@ -11,6 +11,8 @@ import { loadConfig } from "../core/config.ts";
 import { htmlToText } from "../core/http.ts";
 import { entries, monthStart } from "../core/ledger.ts";
 import { canUseSmallModel, smallJson } from "../core/model.ts";
+// @ts-expect-error plain JS module
+import { notTheirs } from "./links.mjs";
 import { type Job, label, nameWords, registrable, sharesWord, squash } from "./reader.ts";
 import type { Link } from "./render.ts";
 
@@ -193,7 +195,7 @@ export function keep(
       jobs: [],
       board: boardShown,
       listing: null,
-      note: `its roles aren't ${company.name}'s: ${employers.join(", ").slice(0, 80) || "no employer named"}`,
+      note: notTheirs(company.name, employers),
     };
   const ok = shown(page);
   const roles = a.roles.filter((r) => ok(r.title, r.url));

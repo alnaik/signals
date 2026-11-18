@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { tempData } from "../core/testing.ts";
-import { careersJobs, jsonLdJobs } from "./careers.ts";
+import { careersJobs, careersRead, jsonLdJobs } from "./careers.ts";
 
 const data = tempData();
 afterAll(data.cleanup);
@@ -275,4 +275,39 @@ test("a jobs feed the careers page names is read as a feed, RSS or Atom", async 
   expect(
     careersJobs(rss, "https://careers.acme.com/jobs.rss").map((j) => [j.id, j.title, j.postedAt]),
   ).toEqual([["7", "Sales Lead", "2026-10-30T10:00:00.000Z"]]);
+});
+
+test("a job site's feed, its roles at many employers, is no company's: refused, naming them; one employer's feed is read", () => {
+  const rss = (items: string[]) =>
+    `<?xml version="1.0"?><rss><channel><title>Jobs</title>${items.join("")}</channel></rss>`;
+  const item = (title: string, n: number, more = "") =>
+    `<item><title>${title}</title><link>https://postwork.dev/jobs/${n}</link>${more}</item>`;
+  // As a job site writes them: "Role @ Employer [pay]", every link on the job site itself.
+  const employers = ["Quillmore", "Brackenfield", "Ostrava Labs", "Pellwick", "Quillmore"];
+  const site = rss(employers.map((e, i) => item(`Engineer ${i} @ ${e} [$90,000 - 120,000]`, i)));
+  expect(careersRead(site, "https://postwork.dev/rss")).toEqual({
+    jobs: [],
+    others: ["Quillmore", "Brackenfield", "Ostrava Labs", "Pellwick"],
+  });
+  expect(careersJobs(site, "https://postwork.dev/rss")).toEqual([]);
+  // Or by each entry's <company>.
+  const tagged = rss(employers.map((e, i) => item(`Engineer ${i}`, i, `<company>${e}</company>`)));
+  expect(careersRead(tagged, "https://postwork.dev/rss").others).toHaveLength(4);
+  // One employer's own feed, however it writes its titles, is read.
+  const own = rss([0, 1, 2, 3, 4].map((i) => item(`Engineer ${i} @ Quillmore (Remote)`, i)));
+  expect(careersRead(own, "https://quillmore.dev/jobs.rss")).toMatchObject({ others: [] });
+  expect(careersJobs(own, "https://quillmore.dev/jobs.rss")).toHaveLength(5);
+  const ownTagged = rss([0, 1, 2, 3, 4].map((i) => item(`Engineer ${i}`, i, "<company>Quillmore</company>")));
+  expect(careersJobs(ownTagged, "https://quillmore.dev/jobs.rss")).toHaveLength(5);
+  // One employer's legal entities are one employer.
+  const entities = ["Quillmore Inc", "Quillmore GmbH", "Quillmore Ltd", "Quillmore S.A.", "The Quillmore Co"];
+  const legal = rss(entities.map((e, i) => item(`Engineer ${i}`, i, `<company><![CDATA[${e}]]></company>`)));
+  expect(careersJobs(legal, "https://quillmore.dev/jobs.rss")).toHaveLength(5);
+  // Three employers aren't many: a company may post for a few of its own.
+  expect(
+    careersJobs(
+      rss(employers.slice(0, 3).map((e, i) => item(`Engineer @ ${e}`, i))),
+      "https://postwork.dev/rss",
+    ),
+  ).toHaveLength(3);
 });

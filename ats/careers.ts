@@ -4,7 +4,7 @@
 // the small model (pages.ts). Snapshots and diffs then work as for any ATS.
 import { isPublicUrl, unescapeHtml } from "../core/http.ts";
 // @ts-expect-error plain JS module
-import { feedJobs, isFeed, manyEmployers, ownJobList } from "./links.mjs";
+import { feedJobs, isFeed, otherEmployers, ownJobList } from "./links.mjs";
 import type { Job } from "./reader.ts";
 
 type Ld = Record<string, unknown>;
@@ -65,11 +65,19 @@ export function jsonLdJobs(jsonld: unknown[], pageUrl: string): Job[] {
 
 /**
  * A careers page's postings from its plain HTML: JobPosting data, else its own job list in its
- * data. A jobs feed the page named is read as the feed it is. A list whose roles are on many
- * employers' boards is a fund's job board, no company's: none.
+ * data. A jobs feed the page named is read as the feed it is. A list whose roles are at many
+ * employers (a fund's job board, a job site's feed) is no company's: no jobs, and `others` names
+ * those employers.
  */
-export function careersJobs(html: string, pageUrl: string): Job[] {
-  type Listed = { id: string; title: string; url: string; location?: string; postedAt?: string | null };
+export function careersRead(html: string, pageUrl: string): { jobs: Job[]; others: string[] } {
+  type Listed = {
+    id: string;
+    title: string;
+    url: string;
+    location?: string;
+    postedAt?: string | null;
+    employer?: string | null;
+  };
   const jobs = (list: Listed[]): Job[] =>
     list.map((r) => ({
       id: r.id,
@@ -78,13 +86,27 @@ export function careersJobs(html: string, pageUrl: string): Job[] {
       location: r.location ?? "",
       postedAt: r.postedAt ?? null,
     }));
-  const one = (list: Job[]) => {
-    const urls = list.map((j) => j.url);
-    return manyEmployers(urls, pageUrl) ? [] : list;
+  const one = (list: Job[], entries: Pick<Listed, "url" | "title" | "employer">[] = list) => {
+    const others: string[] = otherEmployers(entries, pageUrl);
+    return others.length ? { jobs: [], others } : { jobs: list, others };
   };
-  if (isFeed(html)) return one(jobs(feedJobs(html, pageUrl)));
+  if (isFeed(html)) {
+    const feed: Listed[] = feedJobs(html, pageUrl);
+    return one(jobs(feed), feed);
+  }
   const ld = jsonLdJobs(ldBlocks(html), pageUrl);
-  if (ld.length) return one(ld);
+  if (ld.length) {
+    const org = (o: Ld) => (o.hiringOrganization as Ld | undefined)?.name;
+    const named = ldPostings(html).map((o) => ({
+      url: String(o.url ?? pageUrl),
+      title: String(o.title ?? ""),
+      employer: typeof org(o) === "string" ? (org(o) as string) : null,
+    }));
+    return one(ld, named);
+  }
   const list: Listed[] = ownJobList([html], pageUrl);
-  return list.length >= 3 ? one(jobs(list)) : [];
+  return list.length >= 3 ? one(jobs(list), list) : { jobs: [], others: [] };
 }
+
+/** careersRead's jobs. */
+export const careersJobs = (html: string, pageUrl: string): Job[] => careersRead(html, pageUrl).jobs;

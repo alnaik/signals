@@ -27,13 +27,16 @@ import {
   careersPage,
   doverLookup,
   embedBoards,
+  feedJobs,
   hrefsIn,
   isDemoBoard,
   isEmbedPath,
+  isFeed,
   jobIds,
   jobsFeed,
   linksIn,
-  manyEmployers,
+  notTheirs,
+  otherEmployers,
   ownJobList,
   smartRecruitersIds,
 } from "./links.mjs";
@@ -443,6 +446,7 @@ async function detect(c) {
   const site = c.site ?? c.domain;
   const tried = [];
   const reasons = []; // why a board a page named couldn't be read ("successfactors: robots.txt disallows …")
+  let refused = null; // a job list or feed of many employers' roles: why it isn't the company's
   // `named`: the page itself names this board (an embed), so it counts even with no roles
   // today, or when the board's API answers "not found" in JSON (a closed board).
   const attempt = async (link, method, provider = undefined, named = false) => {
@@ -550,13 +554,24 @@ async function detect(c) {
       if (hit) return hit;
     }
     // No provider claims the page's job list: the list itself is the board, unless its roles are
-    // on many employers' boards (a fund's job board). So is a jobs feed it names.
+    // at many employers (a fund's job board). So is a jobs feed it names, read here for the same
+    // check (a job site's feed); one that doesn't load is left to its first read (refresh.ts).
+    const others = (list, url) => {
+      const named = otherEmployers(list, url);
+      if (named.length) {
+        const why = notTheirs(c.name ?? site, named);
+        refused ??= why;
+        reasons.push(`${url}: ${why}`);
+      }
+      return named.length > 0;
+    };
     const list = ownJobList([page.html], page.url);
-    const urls = list.map((r) => r.url);
-    if (list.length >= 3 && !manyEmployers(urls, page.url)) return { provider: null, careers_read: page.url };
+    if (list.length >= 3 && !others(list, page.url)) return { provider: null, careers_read: page.url };
     const feed = jobsFeed(page.html, page.url);
-    if (feed) return { provider: null, careers_read: feed };
-    return null;
+    if (!feed) return null;
+    const got = await fetchBody(feed, /xml|rss|atom/i).catch(() => null);
+    if (got && isFeed(got.html) && others(feedJobs(got.html, got.url), feed)) return null;
+    return { provider: null, careers_read: feed };
   };
   // Given pages (a careers site, a posting a web search found): each page, its links and
   // scripts, and every vendored provider's detection on them; no crawling past them.
@@ -688,7 +703,11 @@ async function detect(c) {
   ].slice(0, 4);
   // Nothing fetched at all: say why (an expired certificate, a domain that no longer resolves).
   // Pages fetched but no board and no roles on them: say that, not only "no board".
-  const problem = tried.length ? (careersRead ? null : "pages fetched, no board found") : siteProblem(errors);
+  const problem = tried.length
+    ? careersRead
+      ? null
+      : (refused ?? "pages fetched, no board found")
+    : siteProblem(errors);
   const email = careersRead ? null : (emails.careers ?? emails.home);
   return {
     provider: null,

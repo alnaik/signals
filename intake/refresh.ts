@@ -4,11 +4,11 @@
 // filters once, here), roles still listed are touched, and a role missing from two good reads
 // in a row closes. A read that failed, was cut off or came back suspiciously small closes nothing.
 import { createHash } from "node:crypto";
-import { careersJobs } from "../ats/careers.ts";
+import { careersRead } from "../ats/careers.ts";
 import { workdayDetail } from "../ats/detail.ts";
 import { loadFilters, type PostingFilters, SCORE_RULES, score, stems, workMode } from "../ats/filters.ts";
 // @ts-expect-error plain JS module
-import { isFeed } from "../ats/links.mjs";
+import { isFeed, notTheirs } from "../ats/links.mjs";
 import { canReadPages, type PageText, plainText, readPage, textHash } from "../ats/read-page.ts";
 import {
   ashbyEmbedView,
@@ -870,7 +870,8 @@ async function readCareersPage(
     validators = { etag: got.etag, lastModified: got.lastModified };
     html = got.text;
   }
-  const free = careersJobs(html, b.url);
+  const { jobs: free, others } = careersRead(html, b.url);
+  if (others.length) return othersBoard(b, others, now);
   if (free.length || isFeed(html))
     return applyRead(b, { ok: true, jobs: free, validators }, now, { filters });
   page ??= plainText(html, b.url);
@@ -921,6 +922,35 @@ async function readCareersPage(
   // what it adds is backlog, as on any board's first read, not news.
   const first = b.model_at ? b : { ...b, read_terms: null };
   return applyRead(first, { ok: true, jobs: read.jobs, validators }, now, { filters, hours });
+}
+
+/**
+ * A careers page or feed whose roles are at many employers (a job site's feed, posted under one
+ * of its employers' names) is no company's board: it is out of use, saying why, its roles close,
+ * and its company, with no other board, has none found, as the model's refusal leaves it
+ * (pages.ts). Refresh on the company reads it again, to the same end.
+ */
+function othersBoard(b: Board, others: string[], now: Date): Omit<ReadOutcome, "name"> {
+  const iso = now.toISOString();
+  const d = open();
+  const { name } = d.query("SELECT name FROM companies WHERE id = ?").get(b.company_id) as { name: string };
+  const error = `${NO_ROLES}: ${notTheirs(name, others)}`;
+  const closed = tx(() => {
+    d.query(
+      `UPDATE boards SET status = 'broken', fails = fails + 1, last_error = ?, last_read_at = ?,
+         next_read_at = NULL, lease_until = NULL, role_count = 0 WHERE id = ?`,
+    ).run(error.slice(0, 300), iso, b.id);
+    d.query(
+      `UPDATE companies SET discovery = 'none', discovery_at = ?, discovery_note = ?,
+         search_at = coalesce(search_at, ?)
+       WHERE id = ? AND NOT EXISTS (SELECT 1 FROM boards WHERE company_id = companies.id AND status = 'ok')`,
+    ).run(iso, `its careers page, checked: ${notTheirs(name, others)}`.slice(0, 200), iso, b.company_id);
+    return d.query("UPDATE roles SET closed_at = ? WHERE board_id = ? AND closed_at IS NULL").run(iso, b.id)
+      .changes;
+  });
+  markChanged(now);
+  failure("refresh", b.url, error, { board: b.id });
+  return { board: b.id, company: b.company_id, status: "failed", error, added: 0, closed, listed: 0 };
 }
 
 export const OWN_PAGE_DAYS = 7;

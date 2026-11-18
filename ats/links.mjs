@@ -245,7 +245,7 @@ export function jobsFeed(html, pageUrl) {
 export const isFeed = (text) =>
   /^\s*(?:<\?xml[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:rss|feed|source)\b/i.test(text);
 
-/** A jobs feed's entries, as { id, title, url, location, postedAt }. */
+/** A jobs feed's entries, as { id, title, url, location, postedAt, employer }; employer when it names one. */
 export function feedJobs(xml, feedUrl) {
   const out = [];
   for (const m of xml.matchAll(/<(item|entry|job)\b[^>]*>([\s\S]*?)<\/\1>/gi)) {
@@ -276,6 +276,7 @@ export function feedJobs(xml, feedUrl) {
       url,
       location: [place, ...remote].filter(Boolean).join(" · "),
       postedAt: Number.isNaN(when) ? null : new Date(when).toISOString(),
+      employer: tag("company") ?? tag("employer") ?? tag("hiringorganization") ?? null,
     });
   }
   return out;
@@ -551,15 +552,44 @@ export function employerOf(url) {
   return slug ? `${on}:${slug.toLowerCase()}` : null;
 }
 
+// "Applications Engineer @ Acme [$90,000 - 120,000]": the employer a job site writes after the title.
+const AT_EMPLOYER = /\s@\s*([^@[\]()]+?)\s*(?:[[(].*)?$/;
+
 /**
- * Do a job list's links sit on 4 or more employers' boards besides the page's own? Then the page
- * is a fund's job board (Getro's: a16z, 8VC, Thrive), no one company's list. A link on no job
- * board never counts. Detection (the runner) and the careers-page read (careers.ts) both ask.
+ * The employers a job list's roles are at, when they are 4 or more: no one company's list. By the
+ * job boards its links sit on besides the page's own (a fund's job board: Getro's, for a16z, 8VC,
+ * Thrive), else by the employer each role names (a feed's <company>, a JobPosting's
+ * hiringOrganization, "Engineer @ Acme" in its title: a job site's feed, posted under one of its
+ * employers' names). A link on no job board never counts. Detection (the runner) and the
+ * careers-page read (careers.ts) both ask. `entries`: { url, title?, employer? }.
  */
-export function manyEmployers(urls, pageUrl) {
+export function otherEmployers(entries, pageUrl) {
   const own = employerOf(pageUrl);
-  return new Set(urls.map(employerOf).filter((e) => e && e !== own)).size >= 4;
+  const boards = new Set(entries.map((e) => employerOf(e.url)).filter((e) => e && e !== own));
+  if (boards.size >= 4) return [...boards].map((e) => e.split(":")[1]);
+  // By its first word: one employer's legal entities ("Acme Inc", "Acme GmbH") are one.
+  const named = new Map();
+  for (const e of entries) {
+    const name = (e.employer ?? e.title?.match(AT_EMPLOYER)?.[1] ?? "").trim();
+    const first = name
+      .toLowerCase()
+      .replace(/^the\s+/, "")
+      .match(/[\p{L}\p{N}]+/u)?.[0];
+    if (first && !named.has(first)) named.set(first, name);
+  }
+  return named.size >= 4 ? [...named.values()] : [];
 }
+
+/** Do a job list's links sit on 4 or more employers' boards besides the page's own (otherEmployers)? */
+export const manyEmployers = (urls, pageUrl) =>
+  otherEmployers(
+    urls.map((url) => ({ url })),
+    pageUrl,
+  ).length > 0;
+
+/** Why a list of other employers' roles isn't this company's board, as the model's read says it. */
+export const notTheirs = (name, employers) =>
+  `its roles aren't ${name}'s: ${employers.join(", ").slice(0, 80) || "no employer named"}`;
 
 /**
  * Job ids a page shows, by kind, for checking a board against: Ashby (ashby_jid), Greenhouse
