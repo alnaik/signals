@@ -538,3 +538,84 @@ test("Review titles: an opened group lists its roles, newest first; one role's o
     "AI Security Research & Red Team Engineer",
   ]);
 });
+
+test("Review titles lists your title words with their record; Drop takes one out, its roles leave the Inbox unless another word matches, and Add puts it back", async () => {
+  const filters = { title_include: ["Developer", "Web Developer", "Software Engineer", "Technical Program"] };
+  writeFileSync(paths.me("profile.json"), JSON.stringify({ filters }));
+  const at = new Date();
+  const id = withRoles(
+    "Harrowgate",
+    "harrowgate.dev",
+    [
+      job("h1", "Developer"),
+      job("h2", "Senior Developer"),
+      job("h3", "Java Developer"),
+      job("h4", "Web Developer"), // "Developer" first in your words: it matched that
+      job("h5", "Software Engineer"),
+    ],
+    at,
+  );
+  const roleId = (ext: string) =>
+    (
+      open().query("SELECT id FROM roles WHERE company_id = ? AND ext_id LIKE ?").get(id, `%${ext}`) as {
+        id: number;
+      }
+    ).id;
+  open()
+    .query("UPDATE roles SET state = 'applied', state_at = ? WHERE id = ?")
+    .run(at.toISOString(), roleId("h2"));
+  open()
+    .query("UPDATE roles SET state = 'dismissed', state_at = ? WHERE id = ?")
+    .run(at.toISOString(), roleId("h3"));
+  const { inboxRoles, reviewTitles, titleWords } = await import("./titles.ts");
+  // Most Inbox roles first; a word that matched nothing shows, with zeros.
+  expect(titleWords()).toEqual([
+    { word: "Developer", inbox: 2, applied: 1, dismissed: 1 },
+    { word: "Software Engineer", inbox: 1, applied: 0, dismissed: 0 },
+    { word: "Web Developer", inbox: 0, applied: 0, dismissed: 0 },
+    { word: "Technical Program", inbox: 0, applied: 0, dismissed: 0 },
+  ]);
+  expect(inboxRoles()).toBe(3);
+  const { feature } = await import("./server.ts");
+  const route = feature.routes!["/api/review-titles"] as { POST: (req: Request) => Promise<Response> };
+  const post = async (action: string, phrase: string) =>
+    (await (
+      await route.POST(
+        new Request("http://x/api/review-titles", {
+          method: "POST",
+          body: JSON.stringify({ action, key: "", phrase }),
+        }),
+      )
+    ).json()) as { toast: string };
+  expect((await post("drop", "Developer")).toast).toBe(
+    "Dropped “Developer” from your title words · 1 role left the Inbox",
+  );
+  // "Web Developer" still matches its role: it stays. Applied and dismissed keep their state.
+  expect(titleWords().map((w) => [w.word, w.inbox])).toEqual([
+    ["Web Developer", 1],
+    ["Software Engineer", 1],
+    ["Technical Program", 0],
+  ]);
+  const states = () =>
+    open().query("SELECT title, state, fits FROM roles WHERE company_id = ? ORDER BY ext_id").all(id);
+  expect(states()).toEqual([
+    { title: "Developer", state: "new", fits: 0 },
+    { title: "Senior Developer", state: "applied", fits: 0 },
+    { title: "Java Developer", state: "dismissed", fits: 0 },
+    { title: "Web Developer", state: "new", fits: 1 },
+    { title: "Software Engineer", state: "new", fits: 1 },
+  ]);
+  // Its roles aren't offered in Review titles: you dropped the word.
+  expect(reviewTitles()).toEqual([]);
+  expect((await post("drop", "Developer")).toast).toBe("“Developer” isn't one of your title words");
+  // Add back: it fits again, and is no longer a word you dropped.
+  expect((await post("add", "Developer")).toast).toBe(
+    "Added “Developer” to your title words · 3 more roles fit",
+  );
+  expect(inboxRoles()).toBe(3);
+  const { loadFilters } = await import("../ats/filters.ts");
+  expect(loadFilters()).toMatchObject({
+    title_include: ["Web Developer", "Software Engineer", "Technical Program", "Developer"],
+    title_dropped: [],
+  });
+});

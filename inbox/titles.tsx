@@ -4,7 +4,7 @@ import { roleHref } from "../board/format.ts";
 import { SectionHead } from "../board/Queue.tsx";
 import type { Ctx } from "../board/slots.ts";
 import { ModeBadge, Tag } from "../board/ui.tsx";
-import type { TitleGroup, TitleRole } from "./titles.ts";
+import type { TitleGroup, TitleRole, TitleWord } from "./titles.ts";
 
 const n = (x: number) => x.toLocaleString("en-US");
 const plural = (x: number, one: string, many = `${one}s`) => `${n(x)} ${x === 1 ? one : many}`;
@@ -167,13 +167,93 @@ function Tier({ groups, tick, act }: { groups: TitleGroup[]; tick: number; act: 
   );
 }
 
+const WORDS_SHOWN = 10;
+
+/**
+ * Your title words, most Inbox roles first, each with its record. Drop takes one out of them; it
+ * stays here, dropped, with Add back, until you leave the page.
+ */
+function Words({ words, ctx, reload }: { words: TitleWord[]; ctx: Ctx; reload: () => Promise<void> }) {
+  const [more, setMore] = useState(false);
+  const [dropped, setDropped] = useState<string[]>([]);
+  const post = async (action: "drop" | "add", word: string) => {
+    const res = await ctx.post("/api/review-titles", { action, key: "", phrase: word });
+    const out = await res.json().catch(() => ({ toast: "Something went wrong" }));
+    ctx.toast(out.toast);
+    if (res.ok) setDropped((ds) => (action === "drop" ? [...ds, word] : ds.filter((d) => d !== word)));
+    await reload();
+    await ctx.refetch();
+  };
+  const shown = more ? words : words.slice(0, WORDS_SHOWN);
+  const row = (word: string, line: string, button: React.ReactNode, faint = false) => (
+    <div
+      key={word}
+      className="row quiet"
+      style={{ gridTemplateColumns: "minmax(0,1fr) auto", cursor: "default" }}
+    >
+      <div className="l1" style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
+        <span className={faint ? "faint" : undefined} style={{ fontSize: 15, fontWeight: 500 }}>
+          {word}
+        </span>
+        <span className="muted">{line}</span>
+      </div>
+      <div className="actions">{button}</div>
+    </div>
+  );
+  return (
+    <>
+      <div className="label" style={{ margin: "14px 0 4px" }}>
+        Your title words · {n(words.length)}
+      </div>
+      {dropped.map((w) =>
+        row(
+          w,
+          "dropped",
+          <button
+            type="button"
+            className="small"
+            title={`Puts “${w}” back in your title words`}
+            onClick={() => post("add", w)}
+          >
+            Add back
+          </button>,
+          true,
+        ),
+      )}
+      {shown.map((w) =>
+        row(
+          w.word,
+          `${n(w.inbox)} in the Inbox · ${n(w.applied)} applied · ${n(w.dismissed)} dismissed`,
+          <button
+            type="button"
+            className="small"
+            title={`Takes “${w.word}” out of your title words: its roles leave the Inbox, unless another word of yours matches them. Roles you applied to or dismissed stay as they are.`}
+            onClick={() => post("drop", w.word)}
+          >
+            Drop
+          </button>,
+        ),
+      )}
+      {shown.length < words.length && (
+        <button type="button" className="small link" onClick={() => setMore(true)}>
+          show all {n(words.length)} words
+        </button>
+      )}
+    </>
+  );
+}
+
 export function ReviewTitles({ ctx }: { ctx: Ctx }) {
   const [groups, setGroups] = useState<TitleGroup[] | null>(null);
+  const [words, setWords] = useState<TitleWord[]>([]);
   const [others, setOthers] = useState(false);
   const [tick, setTick] = useState(0); // an Add: open groups read their roles again
   const load = useCallback(async () => {
     const r = await fetch("/api/review-titles");
-    if (r.ok) setGroups((await r.json()).groups);
+    if (!r.ok) return;
+    const got = await r.json();
+    setGroups(got.groups);
+    setWords(got.words);
   }, []);
   useEffect(() => {
     load();
@@ -205,8 +285,11 @@ export function ReviewTitles({ ctx }: { ctx: Ctx }) {
         <p className="muted" style={{ margin: "6px 0 12px", maxWidth: 760 }}>
           Roles in your places whose title names a job but has none of your title words, grouped. Add puts the
           phrase in your title words (as in Settings): its roles fit from now and come to the Inbox. Not mine
-          stops showing a group; its roles stay open, and search still finds them.
+          stops showing a group; its roles stay open, and search still finds them. Drop takes one of your
+          title words out: its roles leave the Inbox and aren't shown here, unless another word of yours
+          matches them.
         </p>
+        {words.length > 0 && <Words words={words} ctx={ctx} reload={load} />}
         {groups.length === 0 && (
           <div className="empty">Nothing to review: every title here has your words.</div>
         )}

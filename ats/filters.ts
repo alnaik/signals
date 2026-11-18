@@ -11,6 +11,9 @@ export type PostingFilters = {
   // Review titles' Not mine: groups (Score's `review`) no longer offered. Not an exclusion, and
   // not part of what scoring reads (intake/refresh.ts filtersKey leaves it out).
   title_skip?: string[];
+  // Title words you dropped (Review titles' Drop): a title with one, and none you keep, isn't
+  // offered in Review titles again. Add takes a word off.
+  title_dropped?: string[];
 };
 
 /**
@@ -587,13 +590,14 @@ function reviewOf(x: Toks, c: Phrases): { key: string; phrase: string; like: str
 export type Score = {
   fits: boolean;
   matched: string | null;
-  // In your places, names a job, none of your words and none you left out: its group in the
+  // In your places, names a job, none of your words, none you left out or dropped: its group in the
   // Review list (reviewOf). null otherwise.
   review: string | null;
 };
 type Compiled = {
   include: Phrases;
   exclude: Phrases;
+  dropped: Phrases;
   hasInclude: boolean;
   locations: Words;
   remoteOk: boolean;
@@ -606,6 +610,7 @@ function compile(f: PostingFilters): Compiled {
     c = {
       include: compilePhrases(f.title_include),
       exclude: compilePhrases(f.title_exclude),
+      dropped: compilePhrases(f.title_dropped),
       hasInclude: (f.title_include ?? []).some((w) => typeof w === "string" && tokenise(w).t.length > 0),
       locations: compileWords(f.locations, true),
       remoteOk: remoteOk(f),
@@ -676,7 +681,8 @@ export function score(
     return !!place || loc === "" || (c.us && noCity(loc));
   };
   if (c.hasInclude && !title) {
-    const review = hasRole(x.t) && inPlace() ? (reviewOf(x, c.include)?.key ?? null) : null;
+    const review =
+      hasRole(x.t) && !titleMatch(x, c.dropped) && inPlace() ? (reviewOf(x, c.include)?.key ?? null) : null;
     return { fits: false, matched: null, review };
   }
   if (!inPlace()) return { fits: false, matched: title ?? null, review: null };

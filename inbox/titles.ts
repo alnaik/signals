@@ -2,13 +2,14 @@
 // (Score's `review`, kept on each role), grouped, biggest first. Add puts a group's phrase in
 // your title words (every open role is scored again, and those roles fit from now); Not mine
 // stops offering the group (filters.title_skip), and changes no score. Nothing becomes a fit
-// without your press.
+// without your press. Your title words are listed too, each with its record, and Drop takes one
+// out of them (filters.title_dropped).
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { loadFilters, reviewTitle, workMode } from "../ats/filters.ts";
-import { getMeta, open, setMeta } from "../core/db.ts";
+import { DAY, getMeta, open, setMeta } from "../core/db.ts";
 import { paths } from "../core/paths.ts";
 import { ensureScored } from "../intake/refresh.ts";
-import { shortPlace } from "./query.ts";
+import { cameAt, EXPIRE_DAYS, shortPlace, sinceWatched } from "./query.ts";
 
 export type TitleGroup = {
   key: string; // the group, as kept on its roles: "Data Engineer + science", "security engineer"
@@ -158,10 +159,82 @@ export function skipTitle(key: string): void {
   writeFileSync(file, JSON.stringify(p, null, 2));
 }
 
-/** The title words with this phrase added at the end (as Settings lists them), or null when it is there. */
-export function withTitle(phrase: string): string[] | null {
-  const list = listOf(profile().p.filters?.title_include);
-  return list.some((w) => w.trim().toLowerCase() === phrase.trim().toLowerCase())
-    ? null
-    : [...list, phrase.trim()];
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The title words with this phrase added at the end (as Settings lists them), and taken off the
+ * words you dropped; null when it is there.
+ */
+export function withTitle(phrase: string): { title_include: string[]; title_dropped?: string[] } | null {
+  const f = profile().p.filters ?? {};
+  const list = listOf(f.title_include);
+  if (list.some((w) => same(w, phrase))) return null;
+  const dropped = listOf(f.title_dropped);
+  const kept = dropped.filter((w) => !same(w, phrase));
+  return {
+    title_include: [...list, phrase.trim()],
+    ...(kept.length < dropped.length ? { title_dropped: kept } : {}),
+  };
+}
+
+/**
+ * The title words without this one, and it among the words you dropped (so its titles aren't
+ * offered here again); null when it isn't one of yours.
+ */
+export function withoutTitle(word: string): { title_include: string[]; title_dropped: string[] } | null {
+  const f = profile().p.filters ?? {};
+  const list = listOf(f.title_include);
+  const kept = list.filter((w) => !same(w, word));
+  if (kept.length === list.length) return null;
+  const dropped = listOf(f.title_dropped).filter((w) => !same(w, word));
+  return { title_include: kept, title_dropped: [...dropped, word.trim()] };
+}
+
+// A role (r, of company c) in the Inbox, as the Inbox lists it (query.ts): new to you, fitting,
+// open, come in the last 21 days, since you watched its company, at a company not dismissed.
+const inInbox = `r.state = 'new' AND r.fits = 1 AND r.closed_at IS NULL AND ${cameAt("r.")} >= $cutoff
+  AND ${sinceWatched(cameAt("r."), "c.watched_at")} AND (c.watched_at IS NOT NULL OR c.dismissed_at IS NULL)`;
+const cutoff = (now: Date) => ({ cutoff: new Date(now.getTime() - EXPIRE_DAYS * DAY).toISOString() });
+
+/** How many roles are in the Inbox. */
+export const inboxRoles = (now = new Date()): number =>
+  (
+    open()
+      .query(`SELECT count(*) AS n FROM roles r JOIN companies c ON c.id = r.company_id WHERE ${inInbox}`)
+      .get(cutoff(now)) as { n: number }
+  ).n;
+
+/** One of your title words and its record: roles it brings to the Inbox now, and those you applied to and dismissed. */
+export type TitleWord = { word: string; inbox: number; applied: number; dismissed: number };
+
+/**
+ * Your title words, most Inbox roles first; a word that matched nothing has zeros. A role counts
+ * under the word it matched (Score's `matched`, the word before " · "): in the Inbox as the Inbox
+ * shows it (query.ts), applied and dismissed whether open or closed.
+ */
+export function titleWords(now = new Date()): TitleWord[] {
+  ensureScored();
+  const rows = open()
+    .query(
+      `SELECT CASE WHEN instr(r.matched, ' · ') > 0 THEN substr(r.matched, 1, instr(r.matched, ' · ') - 1)
+           ELSE r.matched END AS word,
+         sum(${inInbox}) AS inbox, sum(r.state = 'applied') AS applied, sum(r.state = 'dismissed') AS dismissed
+       FROM roles r JOIN companies c ON c.id = r.company_id
+       WHERE r.matched IS NOT NULL GROUP BY word`,
+    )
+    .all(cutoff(now)) as TitleWord[];
+  const by = new Map(rows.map((r) => [r.word, r]));
+  const words = [
+    ...new Set(
+      listOf(loadFilters().title_include)
+        .map((w) => w.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return words
+    .map((word) => {
+      const r = by.get(word);
+      return { word, inbox: r?.inbox ?? 0, applied: r?.applied ?? 0, dismissed: r?.dismissed ?? 0 };
+    })
+    .sort((a, b) => b.inbox - a.inbox);
 }

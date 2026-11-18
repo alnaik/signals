@@ -37,7 +37,11 @@ Under the Inbox's switches, one line counts the roles in your places whose title
 has none of your words, and opens **Review titles**: those titles grouped, biggest first, the ones
 close to a phrase of yours on top ("Data Science Engineer · 13 roles · like your Data Engineer").
 Add puts the phrase in your title words, and its roles come to the Inbox; Not mine stops showing a
-group. Nothing becomes a fit without your press.
+group. Nothing becomes a fit without your press. Above the groups, your title words, most Inbox
+roles first, each with how many roles it has in the Inbox, how many you applied to and how many
+you dismissed. Drop takes a word out: its roles leave the Inbox at once, unless another word of
+yours matches them, and its titles aren't offered in Review titles. Roles you applied to or
+dismissed stay as they are. Add back, beside a word you dropped, puts it back.
 
 The Inbox's **search box** looks at every open role, fitting or not, at any company: each word
 must be in the company's name, the title, the place or the role's kept description

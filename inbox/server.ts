@@ -25,7 +25,16 @@ import {
 } from "./query.ts";
 import { reading, readOffer, startRead, stopRead } from "./read.ts";
 import { search } from "./search.ts";
-import { groupRoles, reviewCount, reviewTitles, skipTitle, withTitle } from "./titles.ts";
+import {
+  groupRoles,
+  inboxRoles,
+  reviewCount,
+  reviewTitles,
+  skipTitle,
+  titleWords,
+  withoutTitle,
+  withTitle,
+} from "./titles.ts";
 
 const json = (b: unknown, status = 200) => Response.json(b, { status });
 const num = (s: string) => (/^\d+$/.test(s) ? Number(s) : Number.NaN);
@@ -186,7 +195,7 @@ export const feature: ServerFeature = {
       GET: (req) => json(groupRoles(new URL(req.url).searchParams.get("key") ?? "")),
     },
     "/api/review-titles": {
-      GET: () => json({ groups: reviewTitles({ seen: true }) }),
+      GET: () => json({ groups: reviewTitles({ seen: true }), words: titleWords() }),
       POST: async (req) => {
         const b = (await req.json().catch(() => ({}))) as { action?: string; key?: string; phrase?: string };
         const key = String(b.key ?? "").trim();
@@ -194,6 +203,20 @@ export const feature: ServerFeature = {
         if (b.action === "skip" && key) {
           skipTitle(key);
           return json({ toast: "Not offered again" });
+        }
+        // Drop: a title word out of yours. Its roles that no other word of yours matches leave the
+        // Inbox; those you applied to or dismissed keep their state.
+        if (b.action === "drop" && phrase) {
+          const next = withoutTitle(phrase);
+          if (!next) return json({ toast: `“${phrase}” isn't one of your title words` }, 404);
+          const before = inboxRoles();
+          await saveProfile({ filters: next });
+          ensureScored();
+          const n = before - inboxRoles();
+          emit("inbox.changed", {});
+          return json({
+            toast: `Dropped “${phrase}” from your title words · ${n} role${n === 1 ? "" : "s"} left the Inbox`,
+          });
         }
         if (b.action !== "add" || !phrase) return json({ toast: "Nothing to add" }, 400);
         const list = withTitle(phrase);
@@ -205,7 +228,7 @@ export const feature: ServerFeature = {
             }
           ).n;
         const before = fits();
-        await saveProfile({ filters: { title_include: list } });
+        await saveProfile({ filters: list });
         ensureScored();
         const n = fits() - before;
         emit("inbox.changed", {});
